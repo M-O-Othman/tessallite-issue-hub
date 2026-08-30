@@ -1,87 +1,89 @@
-# Tessallite Issue Hub - Development Action Plan
+# Tessallite Issue Hub - Remediation Action Plan
 
-This document outlines the step-by-step implementation plan for building the **Tessallite Issue Hub**, adhering to the provided solution specification.
-
-## Core Assumptions
-1. **Migration Inputs:** As legacy files are not in the current workspace, we will implement the parsers and verify them using test fixtures/mocks that match the legacy formats specified in Section 23.
-2. **Database:** Standard local PostgreSQL via Docker Compose will be utilized for both local development and testing.
-3. **Web UI:** Standard Bootstrap 5 (CDN) + minimal vanilla JS/HTMX for a clean, corporate-grade, responsive user interface.
-4. **Initial Sequence Baseline:** Default to `1000` or `1` if no legacy issues exist, but the migration tool will dynamically determine the baseline from maximum imported numeric suffix or old counter.
+This document details the step-by-step remediation plan to resolve every single critical and major finding from the Deep-Review Report, organized into six gates.
 
 ---
 
-## Phase-by-Phase Roadmap
+## Gate 1: Database Topology & Health Readiness
+- [ ] **Remove Embedded Database:**
+  - Update `Dockerfile` to NOT install PostgreSQL or start any PostgreSQL processes.
+  - Remove all database initialization, cluster setup, and `pg_ctl` background run logic from `entrypoint.sh`.
+  - Let `entrypoint.sh` run ONLY `alembic upgrade head` (against the configured external database) and then `uvicorn`.
+- [ ] **Restore Multi-Service Compose:**
+  - Configure `docker-compose.yml` with two separate services: `app` (FastAPI app) and `db` (PostgreSQL container using `postgres:16-alpine`).
+  - DO NOT publish the database port `5432` to the host by default. Keep it strictly internal to the compose network for security.
+- [ ] **Robust Health Readiness:**
+  - Update `/health/ready` endpoint inside `src/issue_hub/api/health.py` to:
+    - Check database connectivity.
+    - Check that `alembic_version` table exists and contains the latest revision.
+    - Check that the `issues` table and `issue_number_seq` sequence exist and are queryable.
 
-### Phase 0: Repository and Executable Skeleton (Done)
-- [ ] Create repository layout according to Section 33:
-  - `src/issue_hub/`
-  - `src/issue_cli/`
-  - `tests/`
-  - `docs/`
-- [ ] Establish Python environment via `pyproject.toml` using `poetry` or `pip` with `setuptools`. We will use standard `pyproject.toml` with `setuptools` or standard python tooling.
-- [ ] Create `Dockerfile` and `docker-compose.yml` to run application and PostgreSQL.
-- [ ] Implement initial `main.py` (FastAPI app) and a basic CLI script (`issue`).
-- [ ] Add basic health endpoints (`/health/live`, `/health/ready`).
+## Gate 2: Security & Fail-Closed Behavior
+- [ ] **Enforce Secret Settings & Fail-Closed Startup:**
+  - Remove all default/hardcoded values for sensitive variables in production:
+    - `api_token` (fail startup if not provided unless in local dev mode)
+    - `session_secret` (fail startup if default or absent in production)
+    - `web_password_hash` (require explicit hash, fail if default is active)
+  - Define an explicit development profile variable (e.g. `ISSUE_HUB_ENV=development`). If not in development mode, refuse startup if default credentials are detected.
+  - Default administrative import `import_enabled` setting to `False` in production.
+- [ ] **Markdown Sanitization & Stored XSS Mitigation:**
+  - Introduce an HTML sanitization helper inside the Jinja2 Markdown filter. Escape raw HTML or strip unsafe tags before rendering description and next step markdown.
+- [ ] **CSRF Protection & Cookie Hardening:**
+  - Add CSRF token generation and validation to all state-changing Web UI forms.
+  - Configure the session cookie inside `starlette.middleware.sessions.SessionMiddleware` with `https_only=True` (in production), `httponly=True`, and `samesite="lax"`.
+- [ ] **Body and Request Size Limits:**
+  - Add a custom middleware to FastAPI to reject requests exceeding a safe limit (e.g., max 10MB) with a 413 Payload Too Large error.
 
-### Phase 1: Core Schema, Allocation, and API
-- [ ] Set up SQLAlchemy database configuration and Alembic migration environment.
-- [ ] Create database models in `models.py`:
-  - `issues` (Primary live table)
-  - `issue_history` (Audit and mutation history)
-  - `lookup_values` (Advisory vocabularies)
-  - `hub_settings` (Application configuration)
-- [ ] Implement global PostgreSQL sequence `issue_number_seq`.
-- [ ] Write key-template selection and rendering logic in `key_generation.py`.
-- [ ] Implement core issue service in `issue_service.py` to handle creation/reservation inside a single atomic transaction.
-- [ ] Implement read/search logic in `search.py` (exact, text, filter ranking).
-- [ ] Implement API endpoints under `/api/v1/`:
-  - `POST /issues` (Create/reserve)
-  - `GET /issues` (Exact search, text search, filter list)
-  - `PATCH /issues/{issue_id}` (Update fields, append description, retire)
-  - `GET /issues/{issue_id}/history` (Audit history)
-  - `/config/lookups` and `/config/settings` (Metadata administration)
-- [ ] Implement simple bearer-token authentication for the API.
+## Gate 3: Domain Contracts & Inconsistencies
+- [ ] **Fix Reservation Completion:**
+  - In `create_issue` (when completing a previously reserved ID):
+    - Retrieve the existing issue.
+    - Apply ONLY fields explicitly supplied by the caller (using `exclude_unset=True` or checking request payload keys).
+    - Prevent Pydantic defaults (like `project = tessallite`) from silently overwriting existing, custom-saved reserved issue values.
+    - Perform a complete schema validation on the merged result, enforcing that `severity` and `description` are non-empty before transitioning the status from `RESERVED` to `OPEN`.
+- [ ] **Forbid Extra Request Fields:**
+  - Set Pydantic `model_config` to `extra="forbid"` on all request schemas (`CreateIssueRequest`, `UpdateIssueRequestSet`) to reject typos like `sttaus=FIXED`.
+- [ ] **Explicit Field-Clearing Contract:**
+  - Support setting fields to empty string `""` or a custom null marker to explicitly clear optional fields (such as `owner`, `area`, `source`, `aka`, `related_to`, etc.).
+- [ ] **Enforce Database Settings:**
+  - Update `create_issue`, `update_issue`, and `query_issues` services to dynamically load and utilize active settings (like `default_project`, `search_default_limit`, `title_max_length`) from the `hub_settings` table instead of using hardcoded fallbacks.
+- [ ] **Key Template Validation:**
+  - Enforce validation on `key_template` updates inside `/settings` or `/api/v1/config/settings`:
+    - Ensure exactly one `{number}` placeholder is present.
+    - Ensure only supported placeholder names are used.
+    - Verify maximum rendered length is safe.
+- [ ] **Implement `include_history` & Case-Insensitive Lookup:**
+  - Support `include_history` in list queries.
+  - Implement case-insensitive lookup for both exact ID and AKA queries.
+- [ ] **Standardized Error Envelopes:**
+  - Implement a global exception handler in FastAPI for both `RequestValidationError` and `HTTPException` to catch and normalize all validation and HTTP errors into the stable, flat JSON envelope: `{"ok": false, "error": {"code": "...", "message": "...", "details": "..."}}`.
 
-### Phase 2: Operational CLI and Agent README
-- [ ] Implement the `issue` CLI package with zero-dependency HTTP and standard `argparse`.
-- [ ] Add CLI commands:
-  - `issue create` (options: metadata, `--reserve`, `--json`, `--description-file`)
-  - `issue find` (by ID, text query, or filtering parameters)
-  - `issue update` (options: `--set`, `--append-file`, `--add-tag`, `--retire`)
-- [ ] Implement configuration precedence (CLI flag -> ENV var -> `config.json`).
-- [ ] Verify execution in Linux Bash and Windows CMD/PowerShell environments.
-- [ ] Write the Agent-facing README at `docs/execution/issue-hub/README.md`.
+## Gate 4: High-Fidelity Migration Tooling
+- [ ] **Support Real Non-Frontmatter Intake Format:**
+  - Upgrade `intake_parser.py` to parse files that begin directly with keys (like `status:`, `severity:`, `area:`) without requiring the `---` frontmatter block.
+- [ ] **Correct Intake IDs:**
+  - Parse legacy `TMP-*` intake files as pending items, allocating them a fresh canonical `Bug-N` while storing the original temporary ID inside `aka` (or aliases), as required.
+- [ ] **Preserve Terminal Statuses & Aliases:**
+  - Retain original statuses from the closed registry (e.g. `FIXED`, `RESOLVED`, `BY-DESIGN`, `ACCEPTED-RISK`) instead of forcibly flattening them to `CLOSED`.
+  - Preserve all repeated AKA values as comma-separated aliases instead of stripping or ignoring them.
+- [ ] **Complete Sequence Reconciliation:**
+  - The migration baseline must correctly consider:
+    - Max imported canonical ID suffix.
+    - The old registry's "next number" minus one.
+    - Any newly allocated pending intake numbers.
 
-### Phase 3: Web Application and Configuration
-- [ ] Implement Jinja2 server-rendered views within the FastAPI app.
-- [ ] Set up basic secure session cookies with admin credentials matching environment variables.
-- [ ] Design and implement the following pages using Bootstrap 5:
-  - **Login Page** (Simple admin credentials)
-  - **Issue List and Search Page** (Filters, search bar, active/retired status indicators)
-  - **Create/Reserve Issue Page** (Form, live key preview, validation)
-  - **Issue Detail/Edit/History Page** (Markdown rendering, description appending, retirement controls, history logs)
-  - **Configuration Page** (Editable statuses, template strings, seed data lists)
-- [ ] Implement HTML sanitization for rendered Markdown to prevent security risks.
+## Gate 5: Trustworthy Verification Suite
+- [ ] **Safe Test-Database Guard:**
+  - Ensure test fixtures refuse execution and throw an error if `DATABASE_URL` is pointing to a production-like database name or is not explicitly set as a test environment.
+- [ ] **Comprehensive Test Cases:**
+  - Write test cases for reservation completion edge-cases, CSRF validation, XSS sanitization, body limits, extra-fields forbidden rejection, and case-insensitive exact queries.
+- [ ] **Robust Concurrency Validation:**
+  - Ensure the concurrency gate launches 100 parallel clients across separate processes to verify zero-collision sequences.
 
-### Phase 4: Migration Tooling and Dry Run
-- [ ] Implement `registry_parser.py` (Parsing markdown active/closed registries).
-- [ ] Implement `intake_parser.py` (Parsing markdown intake files).
-- [ ] Implement `import_service.py` and `reconcile.py` to read, parse, validate, and dry-run import.
-- [ ] Write sequence initialization logic to baseline the sequence number after importing.
-- [ ] Build migration fixtures to thoroughly test all edge cases (duplicate IDs, AKA aliases, conflict blocking).
-
-### Phase 5: Verification and Testing
-- [ ] Write comprehensive Unit Tests (`tests/unit/`).
-- [ ] Write Database Integration Tests (`tests/integration/`).
-- [ ] Write Core Concurrency Test (`tests/concurrency/`) launching 100 simultaneous create requests to prove zero-collision allocation.
-- [ ] Write CLI Compatibility Tests (`tests/cli/`).
-- [ ] Write Web UI Tests (`tests/web/`).
-
----
-
-## Definition of Done (Phase Gate Verification)
-Before finalizing:
-1. Verify all 100% test coverage and ensure all tests pass cleanly.
-2. Run database migration tests to confirm PostgreSQL schema upgrades successfully.
-3. Validate that no hardcoded credentials exist.
-4. Ensure code passes linters/type checkers (`ruff`, `mypy` or standard options).
+## Gate 6: Codebase ID Reassignment Script
+- [ ] **Fix find-exec syntax:**
+  - Correct the bash find execution syntax to `bash -c 'reassign_file "$1"' _ {}` to pass filenames correctly.
+- [ ] **Sanitize and Escape Input IDs:**
+  - Escape old and new IDs inside regular expressions and Perl replacement scripts.
+- [ ] **Add Dry-Run & Git-Clean Guards:**
+  - Implement `--dry-run` flag support and check `git status --porcelain` to reject execution on dirty trees unless forced.

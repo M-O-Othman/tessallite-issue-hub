@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, func
 from datetime import datetime, timezone
 from typing import Optional, List
 import re
@@ -8,6 +8,17 @@ from issue_hub.models import Issue, IssueHistory, LookupValue, HubSetting
 from issue_hub.schemas import CreateIssueRequest, UpdateIssueRequest
 from issue_hub.config import settings
 from issue_hub.key_generation import render_issue_id
+from typing import Any
+
+def get_hub_setting(db: Session, key: str, default: Any) -> Any:
+    """Dynamically load active configuration overrides from the database (Gate 3)."""
+    try:
+        setting = db.query(HubSetting).filter(HubSetting.setting_key == key).first()
+        if setting and setting.setting_value:
+            return setting.setting_value.get("value", default)
+    except Exception:
+        pass
+    return default
 
 class IssueHubException(Exception):
     def __init__(self, code: str, message: str, details: Optional[dict] = None):
@@ -96,7 +107,7 @@ def create_issue(db: Session, request: CreateIssueRequest, import_mode: bool = F
     """Core transaction logic for creating or reserving an issue (Section 34.1)."""
     # If Caller supplies an ID
     if request.id:
-        reserved = db.query(Issue).filter(Issue.issue_id == request.id).first()
+        reserved = db.query(Issue).filter(func.lower(Issue.issue_id) == func.lower(request.id)).first()
         if not reserved:
             if not import_mode:
                 raise CallerSuppliedIdNotAllowed(request.id)
@@ -107,57 +118,70 @@ def create_issue(db: Session, request: CreateIssueRequest, import_mode: bool = F
         if reserved:
             before = reserved.to_dict()
             
-            # Update fields on the reserved issue
-            if request.project is not None:
+            # Update fields on the reserved issue ONLY if explicitly supplied (Gate 3 / Section 7)
+            supplied = request.model_fields_set
+            
+            if "project" in supplied:
                 reserved.project = request.project
-            if request.repository is not None:
+            if "repository" in supplied:
                 reserved.repository = request.repository
-            if request.branch is not None:
+            if "branch" in supplied:
                 reserved.branch = request.branch
-            if request.worktree is not None:
+            if "worktree" in supplied:
                 reserved.worktree = request.worktree
-            if request.task is not None:
+            if "task" in supplied:
                 reserved.task = request.task
             
             # Default status transitions from RESERVED to request.status or OPEN
-            if request.status and request.status != "RESERVED":
+            if "status" in supplied and request.status != "RESERVED":
                 reserved.status = request.status
             elif reserved.status == "RESERVED" and not request.reserve:
-                reserved.status = request.status or "OPEN"
+                reserved.status = "OPEN"
                 
-            if request.severity is not None:
+            if "severity" in supplied:
                 reserved.severity = request.severity
-            if request.priority is not None:
+            if "priority" in supplied:
                 reserved.priority = request.priority
-            if request.expected_effort is not None:
+            if "expected_effort" in supplied:
                 reserved.expected_effort = request.expected_effort
                 
-            if request.description is not None:
+            if "description" in supplied:
                 reserved.description = request.description
                 
-            reserved.title = request.title or derive_title(reserved.description)
+            # Title handling
+            if "title" in supplied:
+                reserved.title = request.title
+            elif (not reserved.title or reserved.title == "Reserved issue") and reserved.description:
+                reserved.title = derive_title(reserved.description)
             
-            if request.area is not None:
+            if "area" in supplied:
                 reserved.area = request.area
-            if request.classification is not None:
+            if "classification" in supplied:
                 reserved.classification = request.classification
-            if request.domain is not None:
+            if "domain" in supplied:
                 reserved.domain = request.domain
-            if request.category is not None:
+            if "category" in supplied:
                 reserved.category = request.category
                 
-            if request.refs is not None:
+            if "refs" in supplied:
                 reserved.refs = request.refs
-            if request.source is not None:
+            if "source" in supplied:
                 reserved.source = request.source
-            if request.aka is not None:
+            if "aka" in supplied:
                 reserved.aka = request.aka
-            if request.owner is not None:
+            if "owner" in supplied:
                 reserved.owner = request.owner
-            if request.recommended_next_step is not None:
+            if "recommended_next_step" in supplied:
                 reserved.recommended_next_step = request.recommended_next_step
-            if request.tags:
+            if "tags" in supplied and request.tags:
                 reserved.tags = clean_tags(request.tags)
+                
+            # Perform schema validation on the final merged result (Gate 3 / Section 7)
+            if reserved.status != "RESERVED":
+                if not reserved.description or not reserved.description.strip():
+                    raise IssueHubException("INVALID_RESERVATION_COMPLETION", "Description is required to complete reservation.")
+                if not reserved.severity or not reserved.severity.strip():
+                    raise IssueHubException("INVALID_RESERVATION_COMPLETION", "Severity is required to complete reservation.")
                 
             reserved.updated_at = datetime.now(timezone.utc)
             db.add(reserved)
@@ -176,27 +200,32 @@ def create_issue(db: Session, request: CreateIssueRequest, import_mode: bool = F
                 db.refresh(reserved)
             return reserved
 
+    # Resolve dynamic defaults from database settings (Gate 3 / Section 8)
+    def_project = get_hub_setting(db, "default_project", settings.default_project)
+    def_repository = get_hub_setting(db, "default_repository", settings.default_repository)
+    def_branch = get_hub_setting(db, "default_branch", settings.default_branch)
+
     # If Caller supplied an ID and import mode is active, we use the supplied ID and bypass sequence/template DB calls (Section 23)
     if request.id and import_mode:
         issue_id = request.id
         # Extract sequence number from the supplied ID if possible
         match = re.search(r"-(\d+)$", request.id)
         number = int(match.group(1)) if match else 0
-        proj = request.project or settings.default_project
+        proj = request.project or def_project
     else:
         # Normal creation/reservation (generate new sequence number)
         number = db.execute(text("SELECT nextval('issue_number_seq')")).scalar()
         
         # Template selection
-        proj = request.project or settings.default_project
+        proj = request.project or def_project
         template = get_project_key_template(db, proj)
         
         issue_id = render_issue_id(
             template=template,
             number=number,
             project=proj,
-            repository=request.repository or settings.default_repository,
-            branch=request.branch or settings.default_branch,
+            repository=request.repository or def_repository,
+            branch=request.branch or def_branch,
             task=request.task,
         )
 
@@ -209,8 +238,8 @@ def create_issue(db: Session, request: CreateIssueRequest, import_mode: bool = F
         issue_id=issue_id,
         sequence_number=number,
         project=proj,
-        repository=request.repository or settings.default_repository,
-        branch=request.branch or settings.default_branch,
+        repository=request.repository or def_repository,
+        branch=request.branch or def_branch,
         worktree=request.worktree,
         task=request.task,
         status=status,
@@ -250,7 +279,7 @@ def create_issue(db: Session, request: CreateIssueRequest, import_mode: bool = F
 
 def update_issue(db: Session, issue_id: str, request: UpdateIssueRequest) -> Issue:
     """Core transaction logic for modifying, appending to, or retiring an issue (Section 34.2)."""
-    current = db.query(Issue).filter(Issue.issue_id == issue_id).first()
+    current = db.query(Issue).filter(func.lower(Issue.issue_id) == func.lower(issue_id)).first()
     if not current:
         raise IssueNotFound(issue_id)
         
@@ -263,7 +292,11 @@ def update_issue(db: Session, issue_id: str, request: UpdateIssueRequest) -> Iss
             if field == "tags" and value is not None:
                 current.tags = clean_tags(value)
             elif value is not None:
-                setattr(current, field, value)
+                # Support explicit field-clearing contract (Gate 3 / Section 9)
+                if isinstance(value, str) and value.strip() in ("", "null", "NULL", "none", "NONE"):
+                    setattr(current, field, None)
+                else:
+                    setattr(current, field, value)
                 
     if request.append_description is not None:
         operation = "APPEND" if not request.set else "UPDATE"

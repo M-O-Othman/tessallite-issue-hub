@@ -2,34 +2,56 @@ import re
 from typing import Dict, Any, Optional
 
 def parse_intake_file(content: str, filename_id: str) -> Optional[Dict[str, Any]]:
-    """Parse a single legacy markdown intake file with YAML-like frontmatter (Section 23.6)."""
+    """Parse a single legacy markdown intake file (Gate 4 / Section 5)."""
     lines = content.splitlines()
     if not lines:
         return None
         
-    # Check for frontmatter start
-    if lines[0].strip() != "---":
-        return None
-        
-    frontmatter_lines = []
-    description_lines = []
-    in_frontmatter = True
-    
-    for line in lines[1:]:
-        if in_frontmatter:
-            if line.strip() == "---":
-                in_frontmatter = False
-            else:
-                frontmatter_lines.append(line)
-        else:
-            description_lines.append(line)
-            
-    # Parse frontmatter keys
     metadata = {}
-    for fl in frontmatter_lines:
-        if ":" in fl:
-            k, v = fl.split(":", 1)
-            metadata[k.strip().lower()] = v.strip()
+    description_lines = []
+    
+    # Check if the file uses frontmatter --- delimiters
+    if lines[0].strip() == "---":
+        frontmatter_lines = []
+        in_frontmatter = True
+        for line in lines[1:]:
+            if in_frontmatter:
+                if line.strip() == "---":
+                    in_frontmatter = False
+                else:
+                    frontmatter_lines.append(line)
+            else:
+                description_lines.append(line)
+        for fl in frontmatter_lines:
+            if ":" in fl:
+                k, v = fl.split(":", 1)
+                metadata[k.strip().lower()] = v.strip()
+    else:
+        # Direct metadata lines (no --- delimiter - Gate 4 / Section 5)
+        VALID_KEYS = {
+            "status", "severity", "area", "title", "refs", "project", "repository", 
+            "branch", "worktree", "task", "priority", "expected_effort", "domain", 
+            "category", "classification", "owner", "aka", "duplicate_of", "related_to", 
+            "resolution", "source", "tags", "created_at", "updated_at", "reopen_count",
+            "calculated_effort", "recommended_next_step"
+        }
+        in_metadata = True
+        for line in lines:
+            if in_metadata:
+                if ":" in line:
+                    parts = line.split(":", 1)
+                    k = parts[0].strip().lower()
+                    if k in VALID_KEYS:
+                        metadata[k] = parts[1].strip()
+                        continue
+                # Blank lines are skipped or switch metadata parsing
+                if not line.strip():
+                    continue
+                # If a line does not match a valid metadata key, we switch to description parsing
+                in_metadata = False
+                description_lines.append(line)
+            else:
+                description_lines.append(line)
             
     # Description parsing
     desc_content = "\n".join(description_lines).strip()
@@ -47,7 +69,6 @@ def parse_intake_file(content: str, filename_id: str) -> Optional[Dict[str, Any]
     seq_num = int(seq_match.group(1)) if seq_match else 0
     
     # Resolve project code
-    # If not present in frontmatter, extract project part from ID prefix, e.g. TESS-TMP-1234 -> TESS
     project = metadata.get("project")
     if not project:
         id_parts = filename_id.split("-")
@@ -58,18 +79,26 @@ def parse_intake_file(content: str, filename_id: str) -> Optional[Dict[str, Any]
         "issue_id": filename_id,
         "sequence_number": seq_num,
         "project": project,
+        "repository": metadata.get("repository"),
+        "branch": metadata.get("branch", "main"),
+        "worktree": metadata.get("worktree"),
+        "task": metadata.get("task"),
         "status": metadata.get("status", "OPEN").upper(),
-        "aka": metadata.get("aka"),
-        "severity": metadata.get("severity", "UNSPECIFIED").upper(),
-        "title": metadata.get("title", "Legacy Intake Issue"),
-        "description": desc_clean or metadata.get("title", "Legacy Intake Issue"),
+        "severity": metadata.get("severity", "HIGH").upper(),
+        "priority": metadata.get("priority"),
+        "expected_effort": metadata.get("expected_effort", "UNKNOWN").upper(),
+        "title": title_val or filename_id,
+        "description": desc_clean or desc_content,
         "area": metadata.get("area"),
-        "refs": metadata.get("refs"),
+        "classification": metadata.get("classification"),
         "domain": metadata.get("domain"),
         "category": metadata.get("category"),
+        "refs": metadata.get("refs"),
+        "source": metadata.get("source"),
+        "aka": metadata.get("aka"),
         "owner": metadata.get("owner"),
-        "source": metadata.get("source") or "legacy-intake",
-        "tags": [t.strip() for t in metadata.get("tags", "").split(",") if t.strip()] if "tags" in metadata else [],
-        "is_retired": metadata.get("is_retired", "false").lower() in ("true", "1", "yes"),
+        "recommended_next_step": metadata.get("recommended_next_step"),
+        "tags": [t.strip() for t in metadata.get("tags", "").split(",") if t.strip()] if metadata.get("tags") else [],
+        "is_retired": False,
         "legacy_raw": content.strip()
     }

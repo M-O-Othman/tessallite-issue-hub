@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, text, desc, asc, cast, String
+from sqlalchemy import or_, text, desc, asc, cast, String, func
 from typing import Optional, List, Tuple
 from datetime import datetime
 
@@ -30,20 +30,21 @@ def query_issues(
     created_to: Optional[datetime] = None,
     updated_from: Optional[datetime] = None,
     updated_to: Optional[datetime] = None,
-    limit: int = 100,
+    limit: Optional[int] = None,
     offset: int = 0,
     sort: Optional[str] = None,
 ) -> Tuple[List[Issue], int]:
     """Search, filter, and paginate issues with custom scoring (Section 21.3)."""
     query = db.query(Issue)
     
-    # Exact ID filter (comma-separated or single)
+    # Exact ID filter (case-insensitive & support combined aliases - Gate 3 / Section 9)
     if id_:
         id_list = [i.strip() for i in id_.split(",") if i.strip()]
-        if len(id_list) == 1:
-            query = query.filter(or_(Issue.issue_id == id_list[0], Issue.aka == id_list[0]))
-        else:
-            query = query.filter(or_(Issue.issue_id.in_(id_list), Issue.aka.in_(id_list)))
+        filters = []
+        for val in id_list:
+            filters.append(func.lower(Issue.issue_id) == func.lower(val))
+            filters.append(Issue.aka.ilike(f"%{val}%"))
+        query = query.filter(or_(*filters))
 
     # Exact field filters
     if project:
@@ -192,8 +193,13 @@ def query_issues(
     # Get total count before pagination
     total = query.count()
     
+    # Resolve dynamic limit from database settings (Gate 3 / Section 8)
+    from issue_hub.issue_service import get_hub_setting
+    db_limit = get_hub_setting(db, "search_default_limit", 100)
+    actual_limit = limit if limit is not None else db_limit
+    
     # Apply limit/offset
-    limit = max(1, min(limit, 1000))
-    query = query.limit(limit).offset(offset)
+    actual_limit = max(1, min(actual_limit, 1000))
+    query = query.limit(actual_limit).offset(offset)
     
     return query.all(), total

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from pydantic import BaseModel
 from typing import List, Optional
 
@@ -70,7 +71,7 @@ def api_import_issues(
     try:
         for rec in request.records:
             # Check for conflict
-            existing = db.query(Issue).filter(Issue.issue_id == rec.issue_id).first()
+            existing = db.query(Issue).filter(func.lower(Issue.issue_id) == func.lower(rec.issue_id)).first()
             if existing:
                 errors.append(f"Conflict: Issue '{rec.issue_id}' already exists.")
                 continue

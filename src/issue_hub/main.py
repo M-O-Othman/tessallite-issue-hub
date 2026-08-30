@@ -1,8 +1,10 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, status
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, status, HTTPException
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, HTMLResponse
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import OperationalError, InterfaceError
 import logging
 
 from issue_hub.database import SessionLocal
@@ -58,11 +60,135 @@ def issue_hub_exception_handler(request, exc: IssueHubException):
         }
     )
 
-# Add session middleware for administrative web UI access (Section 20.1)
+# Database connectivity / unavailability exception handlers
+@app.exception_handler(OperationalError)
+def database_operational_error_handler(request, exc: OperationalError):
+    is_api = request.url.path.startswith("/api/")
+    
+    error_content = {
+        "ok": False,
+        "error": {
+            "code": "DATABASE_UNAVAILABLE",
+            "message": "Database is unavailable or schema is not loaded",
+            "details": {}
+        }
+    }
+    
+    if is_api:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content=error_content
+        )
+    else:
+        html_content = f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <title>Database Unavailable - Tessallite Issue Hub</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+            <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+            <style>
+                body {{ font-family: sans-serif; background-color: #F2F7F4; color: #333333; }}
+                .card {{ border: 1px solid #CBD5E1; border-radius: 14px; background: #FFFFFF; }}
+            </style>
+        </head>
+        <body class="d-flex align-items-center justify-content-center" style="min-height: 100vh;">
+            <div class="card p-5 text-center shadow-sm" style="max-width: 500px;">
+                <div class="text-danger mb-4"><i class="fa-solid fa-triangle-exclamation fa-4x"></i></div>
+                <h4 class="fw-bold mb-3">Database Connection Error</h4>
+                <p class="text-muted small mb-4">The Tessallite Issue Hub cannot establish a connection to the PostgreSQL database on your GCP VM. Please check your network connectivity, database status, or .env configurations.</p>
+                <a href="/" class="btn btn-outline-dark btn-sm w-100 py-2 fw-bold text-uppercase" style="border-radius:10px;"><i class="fa-solid fa-arrows-rotate me-1"></i> Retry Connection</a>
+            </div>
+        </body>
+        </html>
+        """
+        return HTMLResponse(content=html_content, status_code=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+@app.exception_handler(InterfaceError)
+def database_interface_error_handler(request, exc: InterfaceError):
+    return database_operational_error_handler(request, exc)
+
+# Custom validation exception handler (Gate 3 / Section 9)
+@app.exception_handler(RequestValidationError)
+def validation_exception_handler(request, exc: RequestValidationError):
+    errors_list = []
+    for err in exc.errors():
+        loc_str = " -> ".join(str(l) for l in err.get("loc", []))
+        errors_list.append(f"{loc_str}: {err.get('msg', 'invalid value')}")
+    
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "ok": False,
+            "error": {
+                "code": "VALIDATION_FAILED",
+                "message": "; ".join(errors_list),
+                "details": {"errors": exc.errors()}
+            }
+        }
+    )
+
+# Custom HTTP exception handler (Gate 3 / Section 9)
+@app.exception_handler(HTTPException)
+def http_exception_handler(request, exc: HTTPException):
+    detail = exc.detail
+    msg = detail
+    details = {}
+    code = "HTTP_ERROR"
+    
+    if isinstance(detail, dict):
+        if "error" in detail:
+            return JSONResponse(status_code=exc.status_code, content=detail)
+        msg = detail.get("message", str(detail))
+        code = detail.get("code", "HTTP_ERROR")
+        details = detail.get("details", {})
+        
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "ok": False,
+            "error": {
+                "code": code,
+                "message": str(msg),
+                "details": details
+            }
+        }
+    )
+
+from starlette.middleware.base import BaseHTTPMiddleware
+
+class LimitUploadSizeMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app, max_upload_size: int = 10 * 1024 * 1024): # 10MB limit (Gate 2)
+        super().__init__(app)
+        self.max_upload_size = max_upload_size
+
+    async def dispatch(self, request, call_next):
+        content_length = request.headers.get('content-length')
+        if content_length:
+            if int(content_length) > self.max_upload_size:
+                return JSONResponse(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    content={
+                        "ok": False,
+                        "error": {
+                            "code": "PAYLOAD_TOO_LARGE",
+                            "message": f"Payload too large. Maximum body size limit is {self.max_upload_size} bytes.",
+                            "details": {}
+                        }
+                    }
+                )
+        return await call_next(request)
+
+app.add_middleware(LimitUploadSizeMiddleware, max_upload_size=10 * 1024 * 1024)
+
+# Add session middleware for administrative web UI access with hardened cookies (Gate 2 / Section 20.1)
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.session_secret,
-    session_cookie="issue_hub_session"
+    session_cookie="issue_hub_session",
+    same_site="lax",
+    https_only=settings.env != "development"
 )
 
 # Include API, health, and Web UI routers

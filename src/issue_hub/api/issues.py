@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import Optional
 from datetime import datetime
 
@@ -143,9 +144,18 @@ def api_list_issues(
         sort=sort,
     )
     
+    # Process inline history if requested (Gate 3 / Section 9)
+    res_items = []
+    for item in items:
+        issue_dict = item.to_dict()
+        if include_history:
+            h_recs = db.query(IssueHistory).filter(IssueHistory.issue_id == item.issue_id).order_by(IssueHistory.history_id.desc()).all()
+            issue_dict["history"] = [h.to_dict() for h in h_recs]
+        res_items.append(issue_dict)
+    
     return {
         "ok": True,
-        "items": [item.to_dict() for item in items],
+        "items": res_items,
         "total": total,
         "limit": limit,
         "offset": offset,
@@ -185,12 +195,12 @@ def api_issue_history(
 ):
     """Read the mutation and audit history of a specific issue."""
     # Check if issue exists
-    exists = db.query(Issue.issue_id).filter(Issue.issue_id == issue_id).first()
+    exists = db.query(Issue.issue_id).filter(func.lower(Issue.issue_id) == func.lower(issue_id)).first()
     if not exists:
         raise IssueNotFound(issue_id)
         
     history_records = db.query(IssueHistory).filter(
-        IssueHistory.issue_id == issue_id
+        func.lower(IssueHistory.issue_id) == func.lower(issue_id)
     ).order_by(IssueHistory.history_id.desc()).all()
     
     items = []

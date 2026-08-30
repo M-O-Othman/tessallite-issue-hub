@@ -1,12 +1,29 @@
 services:
+  db:
+    image: postgres:16-alpine
+    container_name: issue-hub-db
+    environment:
+      POSTGRES_DB: issue_hub
+      POSTGRES_USER: issue_hub
+      POSTGRES_PASSWORD: secret_password
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U issue_hub -d issue_hub"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   app:
     build: .
     container_name: issue-hub-app
     ports:
       - "8080:8080"
-      - "5432:5432"
     environment:
-      - DATABASE_URL=${DATABASE_URL:-postgresql+psycopg://postgres:placeholder_password@localhost:5432/issue_hub}
+      - DATABASE_URL=postgresql+psycopg://issue_hub:secret_password@db:5432/issue_hub
+      - ISSUE_HUB_ENV=development
       - ISSUE_HUB_API_TOKEN=api_bearer_token_123
       - ISSUE_HUB_WEB_USERNAME=admin
       - ISSUE_HUB_WEB_PASSWORD_HASH=$$2b$$12$$aFi5o69Jva.w9qOPi952mOsdCA3kSt7QprLhhicsNJTBrQSdEaa8O # bcrypt hash of 'admin'
@@ -16,8 +33,10 @@ services:
       - ISSUE_HUB_DEFAULT_BRANCH=main
       - ISSUE_HUB_IMPORT_ENABLED=true
       - PORT=8080
+    depends_on:
+      db:
+        condition: service_healthy
     volumes:
-      - pgdata:/var/lib/postgresql/data
       - .:/app
 
 volumes:

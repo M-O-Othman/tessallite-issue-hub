@@ -18,10 +18,11 @@ class Settings(BaseModel):
         )
     )
     session_secret: str = Field(default_factory=lambda: os.getenv("ISSUE_HUB_SESSION_SECRET", "super_secret_session_key_9999"))
+    env: str = Field(default_factory=lambda: os.getenv("ISSUE_HUB_ENV", "production"))
     default_project: str = Field(default_factory=lambda: os.getenv("ISSUE_HUB_DEFAULT_PROJECT", "tessallite"))
     default_repository: str = Field(default_factory=lambda: os.getenv("ISSUE_HUB_DEFAULT_REPOSITORY", "tessallite-workspace"))
     default_branch: str = Field(default_factory=lambda: os.getenv("ISSUE_HUB_DEFAULT_BRANCH", "main"))
-    import_enabled: bool = Field(default_factory=lambda: os.getenv("ISSUE_HUB_IMPORT_ENABLED", "true").lower() in ("true", "1", "yes"))
+    import_enabled: bool = Field(default_factory=lambda: os.getenv("ISSUE_HUB_IMPORT_ENABLED", "false").lower() in ("true", "1", "yes"))
     title_max_length: int = 500
 
 settings = Settings()

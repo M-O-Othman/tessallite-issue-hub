@@ -24,9 +24,7 @@ def run_migration_import(
     # 2. Parse Closed Registry (slice to first 50 sample issues)
     if closed_registry_content:
         closed_recs = parse_registry_file(closed_registry_content)[:50]
-        # Force closed status on these parsed records
-        for r in closed_recs:
-            r["status"] = "CLOSED"
+        # Preserve original statuses (e.g. FIXED, RESOLVED, BY-DESIGN) rather than flattening to CLOSED (Gate 4 / Section 5)
         parsed_records.extend(closed_recs)
         
     # 3. Parse Intake Files

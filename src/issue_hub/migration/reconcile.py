@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List, Dict, Any, Tuple
 
 from issue_hub.models import Issue
@@ -52,7 +53,7 @@ def reconcile_and_validate(
                 imported_akas.add(aka)
                 
         # 4. Check for database conflicts
-        existing = db.query(Issue).filter(Issue.issue_id == rec_id).first()
+        existing = db.query(Issue).filter(func.lower(Issue.issue_id) == func.lower(rec_id)).first()
         if existing:
             errors.append(f"Conflict: Issue ID '{rec_id}' already exists in database.")
             continue
@@ -61,7 +62,6 @@ def reconcile_and_validate(
         
     # Calculate baseline sequence number offset (Section 23.3)
     # Baseline is max(imported, existing_db) + 1
-    from sqlalchemy import func
     max_db_seq = db.query(func.max(Issue.sequence_number)).scalar() or 0
     calculated_baseline = max(max_imported_seq, max_db_seq) + 1
     

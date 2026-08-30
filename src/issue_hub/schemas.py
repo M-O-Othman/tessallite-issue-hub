@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field, model_validator
 from typing import List, Optional, Dict, Any
 
 class CreateIssueRequest(BaseModel):
+    model_config = {"extra": "forbid"}
     project: str = "tessallite"
     repository: Optional[str] = None
     branch: str = "main"
@@ -45,6 +46,7 @@ class CreateIssueRequest(BaseModel):
         return self
 
 class UpdateIssueRequestSet(BaseModel):
+    model_config = {"extra": "forbid"}
     project: Optional[str] = None
     repository: Optional[str] = None
     branch: Optional[str] = None
@@ -70,11 +72,13 @@ class UpdateIssueRequestSet(BaseModel):
     related_to: Optional[str] = None
 
 class RetireRequest(BaseModel):
+    model_config = {"extra": "forbid"}
     reason: str
     duplicate_of: Optional[str] = None
     note: Optional[str] = None
 
 class UpdateIssueRequest(BaseModel):
+    model_config = {"extra": "forbid"}
     set: Optional[UpdateIssueRequestSet] = None
     append_description: Optional[str] = None
     retire: Optional[RetireRequest] = None
@@ -110,6 +114,7 @@ class IssueResponseData(BaseModel):
     retired_at: Optional[str]
     legacy_raw: Optional[str]
     recommended_next_step: Optional[str] = None
+    history: Optional[List[Dict[str, Any]]] = None
     created_at: str
     updated_at: str
 

@@ -78,6 +78,7 @@
         <div class="card p-4 bg-white mb-4 shadow-sm">
             <h5 class="fw-bold text-dark mb-3"><i class="fa-solid fa-message-paragraph me-2 text-secondary"></i>Append Discussion / Note</h5>
             <form action="/issues/{{ issue.issue_id }}/append" method="post">
+                <input type="hidden" name="csrf_token" value="{{ get_csrf_token(request) }}">
                 <div class="mb-3">
                     <textarea class="form-control font-monospace" name="append_text" rows="5" placeholder="Add update review, code trace, or validation logs..." required></textarea>
                 </div>
@@ -139,6 +140,7 @@
         <div class="card p-4 bg-white mb-4 shadow-sm">
             <h5 class="fw-bold text-dark mb-3"><i class="fa-solid fa-pen-to-square me-2 text-secondary"></i>Update Metadata</h5>
             <form action="/issues/{{ issue.issue_id }}/edit" method="post">
+                <input type="hidden" name="csrf_token" value="{{ get_csrf_token(request) }}">
                 <div class="mb-3">
                     <label for="project" class="form-label small fw-bold">Project</label>
                     <select class="form-select form-select-sm" id="project" name="project" required>
@@ -263,6 +265,7 @@
             <h5 class="fw-bold text-danger mb-3"><i class="fa-solid fa-ban me-2"></i>Retire Issue</h5>
             <p class="text-muted small">Retiring makes this issue inactive, indicating it was duplicate, erroneous, or superseded. It remains visible in Git snaps.</p>
             <form action="/issues/{{ issue.issue_id }}/retire" method="post">
+                <input type="hidden" name="csrf_token" value="{{ get_csrf_token(request) }}">
                 <div class="mb-3">
                     <label for="reason" class="form-label small fw-bold text-danger">Retirement Reason</label>
                     <select class="form-select form-select-sm" id="reason" name="reason" onchange="toggleDuplicateField(this)" required>

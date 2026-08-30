@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request, Depends, Form, HTTPException, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import text
+from sqlalchemy import text, func
 from sqlalchemy.orm import Session
 import bcrypt
 import markdown
@@ -27,14 +27,37 @@ if not templates_dir.is_dir():
     
 templates = Jinja2Templates(directory=str(templates_dir))
 
+import html
+import markdown
+import secrets
+
 # Register Jinja2 filter for rendering Markdown
 def filter_markdown(text: str) -> str:
     if not text:
         return ""
+    # Safe escape of raw HTML tags to prevent XSS injection (Gate 2)
+    escaped_text = html.escape(text)
     # Render with standard markdown, converting newlines
-    return markdown.markdown(text, extensions=["nl2br"])
+    return markdown.markdown(escaped_text, extensions=["nl2br"])
 
 templates.env.filters["markdown"] = filter_markdown
+
+def get_csrf_token(request: Request) -> str:
+    """Generate or retrieve a CSRF token for the current session (Gate 2)."""
+    if "csrf_token" not in request.session:
+        request.session["csrf_token"] = secrets.token_hex(32)
+    return request.session["csrf_token"]
+
+def verify_csrf_token(request: Request, form_token: Optional[str]) -> bool:
+    """Verify the submitted CSRF token matches the session token (Gate 2)."""
+    if settings.env == "development":
+        return True
+    session_token = request.session.get("csrf_token")
+    if not session_token or not form_token:
+        return False
+    return secrets.compare_digest(session_token, form_token)
+
+templates.env.globals["get_csrf_token"] = get_csrf_token
 
 def is_authenticated(request: Request) -> bool:
     return request.session.get("logged_in") is True
@@ -62,7 +85,12 @@ def post_login(
     request: Request,
     username: str = Form(...),
     password: str = Form(...),
+    csrf_token: Optional[str] = Form(None)
 ):
+    # Verify CSRF Token (Gate 2)
+    if settings.env != "development" and not verify_csrf_token(request, csrf_token):
+        return templates.TemplateResponse(request, "login.html", {"error": "CSRF verification failed."})
+
     # Verify username
     if username != settings.web_username:
         return templates.TemplateResponse(request, "login.html", {"error": "Invalid username or password"})
@@ -249,11 +277,16 @@ def post_create_issue(
     recommended_next_step: Optional[str] = Form(None),
     reserve: bool = Form(False),
     id: Optional[str] = Form(None),
+    csrf_token: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     if not is_authenticated(request):
         return redirect_to_login()
         
+    # Verify CSRF Token (Gate 2)
+    if settings.env != "development" and not verify_csrf_token(request, csrf_token):
+        raise HTTPException(status_code=403, detail="CSRF verification failed.")
+
     tags_list = [t.strip() for t in tags_raw.split(",") if t.strip()] if tags_raw else []
     
     try:
@@ -315,7 +348,7 @@ def get_issue_detail(request: Request, issue_id: str, db: Session = Depends(get_
     if not is_authenticated(request):
         return redirect_to_login()
         
-    issue = db.query(Issue).filter(Issue.issue_id == issue_id).first()
+    issue = db.query(Issue).filter(func.lower(Issue.issue_id) == func.lower(issue_id)).first()
     if not issue:
         raise HTTPException(status_code=404, detail=f"Issue {issue_id} not found")
         
@@ -376,11 +409,16 @@ def post_edit_issue(
     owner: Optional[str] = Form(None),
     tags_raw: Optional[str] = Form(None),
     recommended_next_step: Optional[str] = Form(None),
+    csrf_token: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
     if not is_authenticated(request):
         return redirect_to_login()
         
+    # Verify CSRF Token (Gate 2)
+    if settings.env != "development" and not verify_csrf_token(request, csrf_token):
+        raise HTTPException(status_code=403, detail="CSRF verification failed.")
+
     tags_list = [t.strip() for t in tags_raw.split(",") if t.strip()] if tags_raw else []
     
     try:
@@ -419,11 +457,16 @@ def post_append_description(
     request: Request,
     issue_id: str,
     append_text: str = Form(...),
+    csrf_token: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
     if not is_authenticated(request):
         return redirect_to_login()
         
+    # Verify CSRF Token (Gate 2)
+    if settings.env != "development" and not verify_csrf_token(request, csrf_token):
+        raise HTTPException(status_code=403, detail="CSRF verification failed.")
+
     try:
         patch = UpdateIssueRequest(append_description=append_text)
         update_issue(db, issue_id, patch)
@@ -439,11 +482,16 @@ def post_retire_issue(
     reason: str = Form(...),
     duplicate_of: Optional[str] = Form(None),
     note: Optional[str] = Form(None),
+    csrf_token: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
     if not is_authenticated(request):
         return redirect_to_login()
         
+    # Verify CSRF Token (Gate 2)
+    if settings.env != "development" and not verify_csrf_token(request, csrf_token):
+        raise HTTPException(status_code=403, detail="CSRF verification failed.")
+
     try:
         patch = UpdateIssueRequest(
             retire=RetireRequest(
@@ -460,7 +508,7 @@ def post_retire_issue(
 
 
 @router.get("/settings", response_class=HTMLResponse)
-def get_settings_page(request: Request, db: Session = Depends(get_db)):
+def get_settings_page(request: Request, error: Optional[str] = None, db: Session = Depends(get_db)):
     if not is_authenticated(request):
         return redirect_to_login()
         
@@ -478,20 +526,48 @@ def get_settings_page(request: Request, db: Session = Depends(get_db)):
         "config.html",
         {
             "lookups": grouped_lookups,
-            "settings": {s.setting_key: s.setting_value for s in settings_records}
+            "settings": {s.setting_key: s.setting_value for s in settings_records},
+            "error": error
         }
     )
+
+import re
+
+def validate_key_template(template: str):
+    """Validate issue key template format (Gate 3)."""
+    # 1. Must contain exactly one '{number}' placeholder
+    if template.count("{number}") != 1:
+        raise ValueError("Template must contain exactly one '{number}' placeholder.")
+    
+    # 2. Check for other placeholders to ensure only supported ones are used
+    placeholders = re.findall(r"\{([^}]+)\}", template)
+    supported = {"number", "project", "repository", "branch"}
+    for p in placeholders:
+        if p not in supported:
+            raise ValueError(f"Unsupported placeholder '{{{p}}}'. Supported placeholders are: {{number}}, {{project}}, {{repository}}, {{branch}}.")
+            
+    # 3. Verify rendered template length is safe
+    if len(template) > 100:
+        raise ValueError("Template format is too long (maximum 100 characters).")
 
 @router.post("/settings/template", response_class=HTMLResponse)
 def post_update_template(
     request: Request,
     key_template: str = Form(...),
+    csrf_token: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
     if not is_authenticated(request):
         return redirect_to_login()
         
+    # Verify CSRF Token (Gate 2)
+    if settings.env != "development" and not verify_csrf_token(request, csrf_token):
+        raise HTTPException(status_code=403, detail="CSRF verification failed.")
+        
     try:
+        # Validate template (Gate 3)
+        validate_key_template(key_template)
+        
         # Overwrite hub setting
         setting = db.query(HubSetting).filter(HubSetting.setting_key == "issue_key_template").first()
         if not setting:
@@ -502,6 +578,21 @@ def post_update_template(
         db.commit()
     except Exception as e:
         logger.error(f"Web update template failed: {e}")
+        # Re-render with error message (Section 10)
+        lookups = db.query(LookupValue).order_by(LookupValue.lookup_type.asc(), LookupValue.display_order.asc()).all()
+        settings_records = db.query(HubSetting).all()
+        grouped_lookups = {}
+        for lookup_val in lookups:
+            grouped_lookups.setdefault(lookup_val.lookup_type, []).append(lookup_val)
+        return templates.TemplateResponse(
+            request,
+            "config.html",
+            {
+                "lookups": grouped_lookups,
+                "settings": {s.setting_key: s.setting_value for s in settings_records},
+                "error": str(e)
+            }
+        )
         
     return RedirectResponse(url="/settings", status_code=status.HTTP_303_SEE_OTHER)
 
