@@ -211,6 +211,13 @@
                     <input type="text" class="form-control form-control-sm" id="title" name="title" value="{{ issue.title }}" required>
                 </div>
 
+                {% if issue.status == "RESERVED" %}
+                <div class="mb-3">
+                    <label for="description" class="form-label small fw-bold text-success">Complete Description (Required to Open)</label>
+                    <textarea class="form-control form-control-sm font-monospace" id="description" name="description" rows="5" required placeholder="Enter description to complete reservation..."></textarea>
+                </div>
+                {% endif %}
+
                 <div class="mb-3">
                     <label for="area" class="form-label small fw-bold text-muted">Area</label>
                     <input type="text" class="form-control form-control-sm" id="area" name="area" value="{{ issue.area or '' }}">
