@@ -1,0 +1,536 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics Dashboard - Tessallite Issue Hub{% endblock %}
+
+{% block head %}
+<!-- Apache ECharts Library (Section 8) -->
+<script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
+<style>
+    .analytics-card {
+        background: #FFFFFF;
+        border: 1px solid #CBD5E1;
+        border-radius: 14px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+    }
+    .chart-container {
+        width: 100%;
+        height: 400px;
+    }
+    .preset-btn {
+        font-size: 0.75rem;
+        padding: 4px 10px;
+        border-radius: 6px;
+    }
+    .kpi-num {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #006C35;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row g-4 mb-4">
+    <!-- Left Sidebar: Controls & Date Filters -->
+    <div class="col-lg-3">
+        <div class="analytics-card p-4">
+            <h5 class="fw-bold mb-3 text-dark"><i class="fa-solid fa-sliders me-2 text-secondary"></i>Dashboard Filters</h5>
+            <hr class="my-3">
+
+            <!-- Quick Date Presets -->
+            <div class="mb-3">
+                <label class="small fw-bold text-muted mb-2 d-block"><i class="fa-solid fa-clock-rotate-left me-1"></i> Quick Date Ranges</label>
+                <div class="d-flex flex-wrap gap-2">
+                    <button class="btn btn-outline-dark btn-sm preset-btn" onclick="applyPreset('today')">Today</button>
+                    <button class="btn btn-outline-dark btn-sm preset-btn" onclick="applyPreset('yesterday')">Since Yesterday</button>
+                    <button class="btn btn-outline-dark btn-sm preset-btn" onclick="applyPreset('week')">This Week</button>
+                    <button class="btn btn-outline-dark btn-sm preset-btn" onclick="applyPreset('month')">This Month</button>
+                    <button class="btn btn-outline-dark btn-sm preset-btn" onclick="applyPreset('30days')">Last 30 Days</button>
+                    <button class="btn btn-outline-dark btn-sm preset-btn" onclick="applyPreset('year')">This Year</button>
+                    <button class="btn btn-outline-dark btn-sm preset-btn active" id="btn-all-time" onclick="applyPreset('all')">All Time</button>
+                </div>
+            </div>
+
+            <!-- Custom Date Range -->
+            <div class="mb-3">
+                <label class="small fw-bold text-muted mb-1"><i class="fa-solid fa-calendar-days me-1"></i> Custom From Date</label>
+                <input type="date" class="form-control form-control-sm" id="fromDate" onchange="onDateChange()">
+            </div>
+            <div class="mb-3">
+                <label class="small fw-bold text-muted mb-1"><i class="fa-solid fa-calendar-days me-1"></i> Custom To Date</label>
+                <input type="date" class="form-control form-control-sm" id="toDate" onchange="onDateChange()">
+            </div>
+
+            <hr class="my-3">
+
+            <!-- Metadata Filters -->
+            <div class="mb-3">
+                <label for="filter-project" class="small fw-bold text-muted mb-1">Project</label>
+                <select class="form-select form-select-sm" id="filter-project" onchange="updateDashboard()">
+                    <option value="">[All Projects]</option>
+                    {% for p in projects %}
+                    <option value="{{ p[0] }}">{{ p[1] or p[0] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label for="filter-repository" class="small fw-bold text-muted mb-1">Repository</label>
+                <select class="form-select form-select-sm" id="filter-repository" onchange="updateDashboard()">
+                    <option value="">[All Repositories]</option>
+                    {% for r in repositories %}
+                    <option value="{{ r[0] }}">{{ r[1] or r[0] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label for="filter-severity" class="small fw-bold text-muted mb-1">Severity</label>
+                <select class="form-select form-select-sm" id="filter-severity" onchange="updateDashboard()">
+                    <option value="">[All Severities]</option>
+                    {% for s in severities %}
+                    <option value="{{ s[0] }}">{{ s[1] or s[0] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label for="filter-domain" class="small fw-bold text-muted mb-1">Domain</label>
+                <select class="form-select form-select-sm" id="filter-domain" onchange="updateDashboard()">
+                    <option value="">[All Domains]</option>
+                    {% for d in domains %}
+                    <option value="{{ d[0] }}">{{ d[1] or d[0] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label for="filter-category" class="small fw-bold text-muted mb-1">Category</label>
+                <select class="form-select form-select-sm" id="filter-category" onchange="updateDashboard()">
+                    <option value="">[All Categories]</option>
+                    {% for c in categories %}
+                    <option value="{{ c[0] }}">{{ c[1] or c[0] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <button class="btn btn-outline-dark btn-sm w-100 py-2 mt-2" onclick="resetFilters()"><i class="fa-solid fa-arrows-rotate me-1"></i> Reset Filters</button>
+        </div>
+    </div>
+
+    <!-- Right Dashboard Area -->
+    <div class="col-lg-9">
+        <!-- KPI Row -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-3 col-sm-6">
+                <div class="analytics-card p-3 text-center">
+                    <div class="text-muted small fw-bold uppercase">Total Scope</div>
+                    <div class="kpi-num" id="kpi-total">0</div>
+                    <div class="small text-secondary">Matched Issues</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="analytics-card p-3 text-center">
+                    <div class="text-muted small fw-bold uppercase" style="color: #d49a15;">Open Backlog</div>
+                    <div class="kpi-num" style="color: #d49a15;" id="kpi-open">0</div>
+                    <div class="small text-secondary">Pending Resolution</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="analytics-card p-3 text-center">
+                    <div class="text-muted small fw-bold uppercase" style="color: #006C35;">Resolved</div>
+                    <div class="kpi-num" style="color: #006C35;" id="kpi-closed">0</div>
+                    <div class="small text-secondary">Verified & Fixed</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="analytics-card p-3 text-center">
+                    <div class="text-muted small fw-bold uppercase" style="color: #0284c7;">Completion Rate</div>
+                    <div class="kpi-num" style="color: #0284c7;" id="kpi-rate">0%</div>
+                    <div class="small text-secondary">Fidelity Progress</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Timescale Cumulative progress and Burndown Chart -->
+        <div class="analytics-card p-4 mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-chart-line me-2 text-success"></i>Timescale Issue Burndown & Progress</h5>
+                <span class="badge bg-light text-dark border font-monospace">Cumulative Timeline</span>
+            </div>
+            <div id="progress-chart" class="chart-container"></div>
+        </div>
+
+        <!-- Multi-dimension Distribution Analysis -->
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="analytics-card p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-chart-pie me-2 text-info"></i>Distribution Analysis</h5>
+                        <select class="form-select form-select-sm border-dark-subtle fw-bold" id="dist-dimension" style="width: 150px; border-radius: 8px;" onchange="updateDistributionChart()">
+                            <option value="severity">Severity</option>
+                            <option value="status">Status</option>
+                            <option value="category">Category</option>
+                            <option value="domain">Domain</option>
+                            <option value="owner">Owner</option>
+                        </select>
+                    </div>
+                    <div id="distribution-chart" class="chart-container" style="height: 350px;"></div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="analytics-card p-4">
+                    <h5 class="fw-bold mb-3 text-dark"><i class="fa-solid fa-square-poll-vertical me-2 text-warning"></i>Project Contrib Volume</h5>
+                    <div id="project-volume-chart" class="chart-container" style="height: 350px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Raw Issues Dataset parsed from Backend
+    const rawIssues = {{ issues_json|safe }};
+    
+    // ECharts Instances
+    let progressChartInstance = null;
+    let distChartInstance = null;
+    let projVolumeChartInstance = null;
+    
+    // Global Filter State
+    let filterFrom = null;
+    let filterTo = null;
+
+    document.addEventListener("DOMContentLoaded", function() {
+        // Initialize ECharts instances
+        progressChartInstance = echarts.init(document.getElementById("progress-chart"));
+        distChartInstance = echarts.init(document.getElementById("distribution-chart"));
+        projVolumeChartInstance = echarts.init(document.getElementById("project-volume-chart"));
+        
+        // Render initial view (All Time)
+        updateDashboard();
+        
+        // Handle responsive resizing
+        window.addEventListener("resize", function() {
+            progressChartInstance.resize();
+            distChartInstance.resize();
+            projVolumeChartInstance.resize();
+        });
+    });
+
+    // Preset Range applier (Section 8)
+    function applyPreset(preset) {
+        // Deactivate all preset buttons
+        document.querySelectorAll(".preset-btn").forEach(btn => btn.classList.remove("active"));
+        
+        const now = new Date();
+        const todayStr = now.toISOString().slice(0, 10);
+        
+        document.getElementById("fromDate").value = "";
+        document.getElementById("toDate").value = "";
+        
+        if (preset === "all") {
+            document.getElementById("btn-all-time").classList.add("active");
+            filterFrom = null;
+            filterTo = null;
+        } else {
+            let fromDate = new Date();
+            if (preset === "today") {
+                fromDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            } else if (preset === "yesterday") {
+                fromDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+            } else if (preset === "week") {
+                const day = now.getDay();
+                const diff = now.getDate() - day + (day === 0 ? -6 : 1); // Monday
+                fromDate = new Date(now.setDate(diff));
+            } else if (preset === "month") {
+                fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+            } else if (preset === "30days") {
+                fromDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
+            } else if (preset === "year") {
+                fromDate = new Date(now.getFullYear(), 0, 1);
+            }
+            
+            filterFrom = fromDate;
+            filterTo = new Date();
+            
+            document.getElementById("fromDate").value = filterFrom.toISOString().slice(0, 10);
+            document.getElementById("toDate").value = filterTo.toISOString().slice(0, 10);
+        }
+        
+        updateDashboard();
+    }
+
+    function onDateChange() {
+        document.querySelectorAll(".preset-btn").forEach(btn => btn.classList.remove("active"));
+        
+        const fromStr = document.getElementById("fromDate").value;
+        const toStr = document.getElementById("toDate").value;
+        
+        filterFrom = fromStr ? new Date(fromStr) : null;
+        filterTo = toStr ? new Date(toStr) : null;
+        
+        updateDashboard();
+    }
+
+    function resetFilters() {
+        document.getElementById("filter-project").value = "";
+        document.getElementById("filter-repository").value = "";
+        document.getElementById("filter-severity").value = "";
+        document.getElementById("filter-domain").value = "";
+        document.getElementById("filter-category").value = "";
+        applyPreset("all");
+    }
+
+    function updateDashboard() {
+        // 1. Filter issues based on active state (Gate 2 / Section 10)
+        const filtered = rawIssues.filter(item => {
+            // Date Filter
+            if (filterFrom || filterTo) {
+                const cDate = new Date(item.created_at);
+                if (filterFrom && cDate < filterFrom) return false;
+                if (filterTo && cDate > filterTo) return false;
+            }
+            
+            // Metadata Filters
+            const fProject = document.getElementById("filter-project").value;
+            if (fProject && item.project !== fProject) return false;
+            
+            const fRepo = document.getElementById("filter-repository").value;
+            if (fRepo && item.repository !== fRepo) return false;
+            
+            const fSeverity = document.getElementById("filter-severity").value;
+            if (fSeverity && item.severity !== fSeverity) return false;
+            
+            const fDomain = document.getElementById("filter-domain").value;
+            if (fDomain && item.domain !== fDomain) return false;
+            
+            const fCategory = document.getElementById("filter-category").value;
+            if (fCategory && item.category !== fCategory) return false;
+            
+            return true;
+        });
+
+        // 2. Recalculate KPIs
+        const total = filtered.length;
+        const open = filtered.filter(i => ["OPEN", "UNVERIFIED", "REOPENED"].includes(i.status) && !i.is_retired).length;
+        const closed = filtered.filter(i => ["FIXED", "CLOSED", "VERIFIED", "DONE", "RESOLVED"].includes(i.status) && !i.is_retired).length;
+        const rate = total > 0 ? Math.round((closed / total) * 100) : 0;
+        
+        document.getElementById("kpi-total").innerText = total;
+        document.getElementById("kpi-open").innerText = open;
+        document.getElementById("kpi-closed").innerText = closed;
+        document.getElementById("kpi-rate").innerText = rate + "%";
+
+        // 3. Render Timescale progress and burndown
+        renderProgressChart(filtered);
+        
+        // 4. Render distributions
+        updateDistributionChart(filtered);
+        renderProjectVolumeChart(filtered);
+    }
+
+    function renderProgressChart(issues) {
+        // Collect dates and sort them
+        const datesMap = {};
+        issues.forEach(i => {
+            const dateStr = i.created_at.slice(0, 10);
+            if (!datesMap[dateStr]) datesMap[dateStr] = { opened: 0, closed: 0 };
+            datesMap[dateStr].opened += 1;
+            
+            if (["FIXED", "CLOSED", "VERIFIED", "DONE", "RESOLVED"].includes(i.status)) {
+                const uDateStr = i.updated_at.slice(0, 10);
+                if (!datesMap[uDateStr]) datesMap[uDateStr] = { opened: 0, closed: 0 };
+                datesMap[uDateStr].closed += 1;
+            }
+        });
+
+        const sortedDates = Object.keys(datesMap).sort();
+        
+        // Calculate cumulative timescale progress
+        let cumulativeOpened = 0;
+        let cumulativeClosed = 0;
+        
+        const openedData = [];
+        const closedData = [];
+        const netActiveData = [];
+
+        sortedDates.forEach(date => {
+            cumulativeOpened += datesMap[date].opened;
+            cumulativeClosed += datesMap[date].closed;
+            
+            openedData.push([date, cumulativeOpened]);
+            closedData.push([date, cumulativeClosed]);
+            netActiveData.push([date, Math.max(0, cumulativeOpened - cumulativeClosed)]);
+        });
+
+        const option = {
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: { type: 'cross' }
+            },
+            legend: {
+                data: ['Cumulative Created', 'Cumulative Resolved', 'Net Active (Burndown)'],
+                bottom: 0
+            },
+            grid: {
+                left: '3%', right: '4%', top: '5%', bottom: '15%', containLabel: true
+            },
+            xAxis: {
+                type: 'time',
+                splitLine: { show: false }
+            },
+            yAxis: {
+                type: 'value',
+                boundaryGap: [0, '10%']
+            },
+            series: [
+                {
+                    name: 'Cumulative Created',
+                    type: 'line',
+                    smooth: true,
+                    showSymbol: false,
+                    data: openedData,
+                    itemStyle: { color: '#D4AF37' } // Gold
+                },
+                {
+                    name: 'Cumulative Resolved',
+                    type: 'line',
+                    smooth: true,
+                    showSymbol: false,
+                    data: closedData,
+                    itemStyle: { color: '#006C35' } // Emerald Green
+                },
+                {
+                    name: 'Net Active (Burndown)',
+                    type: 'line',
+                    smooth: true,
+                    showSymbol: false,
+                    data: netActiveData,
+                    areaStyle: {
+                        color: 'rgba(239, 68, 68, 0.1)' // Soft red burndown fill
+                    },
+                    itemStyle: { color: '#ef4444' } // Red
+                }
+            ]
+        };
+
+        progressChartInstance.setOption(option, true);
+    }
+
+    function updateDistributionChart(issuesList) {
+        const issues = issuesList || getActiveFilteredIssues();
+        const dim = document.getElementById("dist-dimension").value;
+        
+        // Aggregate values
+        const groups = {};
+        issues.forEach(i => {
+            let val = i[dim];
+            if (dim === "owner") val = i.owner || "Unassigned";
+            if (dim === "status") val = i.status || "OPEN";
+            if (dim === "severity") val = i.severity || "UNVERIFIED";
+            if (!val) val = "None";
+            
+            groups[val] = (groups[val] || 0) + 1;
+        });
+
+        const chartData = Object.keys(groups).map(key => ({
+            name: key,
+            value: groups[key]
+        })).sort((a,b) => b.value - a.value);
+
+        const option = {
+            tooltip: {
+                trigger: 'item',
+                formatter: '{a} <br/>{b} : {c} ({d}%)'
+            },
+            series: [
+                {
+                    name: dim.toUpperCase(),
+                    type: 'pie',
+                    radius: ['40%', '70%'],
+                    avoidLabelOverlap: false,
+                    padAngle: 3,
+                    itemStyle: {
+                        borderRadius: 8
+                    },
+                    label: {
+                        show: true,
+                        formatter: '{b}: {c}'
+                    },
+                    data: chartData
+                }
+            ]
+        };
+
+        distChartInstance.setOption(option, true);
+    }
+
+    function renderProjectVolumeChart(issues) {
+        // Aggregate by project
+        const projGroups = {};
+        issues.forEach(i => {
+            const p = i.project || "tessallite";
+            projGroups[p] = (projGroups[p] || 0) + 1;
+        });
+
+        const sortedProjs = Object.keys(projGroups).sort((a,b) => projGroups[b] - projGroups[a]);
+        const dataValues = sortedProjs.map(p => projGroups[p]);
+
+        const option = {
+            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+            grid: { left: '3%', right: '4%', top: '5%', bottom: '10%', containLabel: true },
+            xAxis: {
+                type: 'category',
+                data: sortedProjs,
+                axisLabel: { interval: 0, rotate: 15 }
+            },
+            yAxis: { type: 'value' },
+            series: [
+                {
+                    name: 'Issues Count',
+                    type: 'bar',
+                    barWidth: '40%',
+                    data: dataValues,
+                    itemStyle: {
+                        color: '#006C35', // Emerald
+                        borderRadius: [5, 5, 0, 0]
+                    }
+                }
+            ]
+        };
+
+        projVolumeChartInstance.setOption(option, true);
+    }
+
+    // Helper to filter raw dataset using active filters (needed when toggle changing distributions)
+    function getActiveFilteredIssues() {
+        return rawIssues.filter(item => {
+            if (filterFrom || filterTo) {
+                const cDate = new Date(item.created_at);
+                if (filterFrom && cDate < filterFrom) return false;
+                if (filterTo && cDate > filterTo) return false;
+            }
+            
+            const fProject = document.getElementById("filter-project").value;
+            if (fProject && item.project !== fProject) return false;
+            
+            const fRepo = document.getElementById("filter-repository").value;
+            if (fRepo && item.repository !== fRepo) return false;
+            
+            const fSeverity = document.getElementById("filter-severity").value;
+            if (fSeverity && item.severity !== fSeverity) return false;
+            
+            const fDomain = document.getElementById("filter-domain").value;
+            if (fDomain && item.domain !== fDomain) return false;
+            
+            const fCategory = document.getElementById("filter-category").value;
+            if (fCategory && item.category !== fCategory) return false;
+            
+            return true;
+        });
+    }
+</script>
+{% endblock %}

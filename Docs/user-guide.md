@@ -2,7 +2,7 @@
 
 Tessallite Issue Hub is the central authoritative issue registry service designed **specifically for parallel AI coding agents** working on overlapping codebase areas or isolated code trees. It establishes a centralized, non-colliding single source of truth, supporting automated AI agents via an HTTP API and a non-interactive command-line interface (`issue`), alongside human administration through a modern, responsive web application portal.
 
-*For specific integration guidelines for AI coding agents, please read the [AI Agent Handbook](../docs/Agent.md).*
+*For specific integration guidelines for AI coding agents, please read the [AI Agent Handbook](../docs/Agent.md). For a complete visual layout of every visual control and its API parity counterpart, read the [Compatibility & Parity Matrix](../docs/Compatibility-Matrix.md).*
 
 ---
 

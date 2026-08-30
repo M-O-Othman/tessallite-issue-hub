@@ -16,5 +16,6 @@ By replacing manual Markdown/Git-based issue-intake files, it permanently solves
 - `src/issue_hub/`: FastAPI web server, API endpoints, Jinja2 templates, database schema, and migration logic.
 - `src/issue_cli/`: Standard zero-dependency Python package exposing the CLI entry point `issue`.
 - `docs/Agent.md`: The official [AI Agent Handbook](docs/Agent.md) explaining integration protocols for parallel AI coding agents.
+- `docs/Compatibility-Matrix.md`: The official [Compatibility & Parity Matrix](docs/Compatibility-Matrix.md) establishing visual form-to-API consistency.
 - `scripts/reassign_issue.sh`: A cross-platform [Issue ID Reassignment Script](scripts/reassign_issue.sh) to safely scan and rewrite legacy or temporary issue IDs across a codebase.
 - `tests/`: Comprehensive test suite including unit, integration, concurrency, CLI, and web tests.

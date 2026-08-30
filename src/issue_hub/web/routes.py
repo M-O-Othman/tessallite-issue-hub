@@ -174,12 +174,25 @@ def get_issues_list(
         offset=offset,
     )
     
-    # Header summary counts (Section 19.3)
-    count_all = db.query(Issue).count()
-    count_open = db.query(Issue).filter(Issue.status.in_([s[0] for s in statuses if not s[2]]), Issue.is_retired.is_(False)).count()
-    count_closed = db.query(Issue).filter(Issue.status.in_([s[0] for s in statuses if s[2]]), Issue.is_retired.is_(False)).count()
-    count_reserved = db.query(Issue).filter(Issue.status == "RESERVED", Issue.is_retired.is_(False)).count()
-    count_retired = db.query(Issue).filter(Issue.is_retired.is_(True)).count()
+    # Header summary counts, dynamically affected by the active Project Selector context (Section 19.3)
+    q_all = db.query(Issue)
+    q_open = db.query(Issue).filter(Issue.status.in_([s[0] for s in statuses if not s[2]]), Issue.is_retired.is_(False))
+    q_closed = db.query(Issue).filter(Issue.status.in_([s[0] for s in statuses if s[2]]), Issue.is_retired.is_(False))
+    q_reserved = db.query(Issue).filter(Issue.status == "RESERVED", Issue.is_retired.is_(False))
+    q_retired = db.query(Issue).filter(Issue.is_retired.is_(True))
+    
+    if project_norm:
+        q_all = q_all.filter(Issue.project == project_norm)
+        q_open = q_open.filter(Issue.project == project_norm)
+        q_closed = q_closed.filter(Issue.project == project_norm)
+        q_reserved = q_reserved.filter(Issue.project == project_norm)
+        q_retired = q_retired.filter(Issue.project == project_norm)
+        
+    count_all = q_all.count()
+    count_open = q_open.count()
+    count_closed = q_closed.count()
+    count_reserved = q_reserved.count()
+    count_retired = q_retired.count()
     
     return templates.TemplateResponse(
         request,
@@ -613,6 +626,38 @@ def post_update_template(
         
     return RedirectResponse(url="/settings", status_code=status.HTTP_303_SEE_OTHER)
 
+
+@router.get("/visualization", response_class=HTMLResponse)
+def get_visualization(request: Request, db: Session = Depends(get_db)):
+    if not is_authenticated(request):
+        return redirect_to_login()
+        
+    import json
+    # Fetch all issues in the database
+    all_issues = db.query(Issue).all()
+    issues_json = json.dumps([i.to_dict() for i in all_issues], default=str)
+    
+    # Query lookups for filtering lists
+    projects = db.query(LookupValue.value, LookupValue.label).filter(LookupValue.lookup_type == "PROJECT", LookupValue.is_active.is_(True)).all()
+    repositories = db.query(LookupValue.value, LookupValue.label).filter(LookupValue.lookup_type == "REPOSITORY", LookupValue.is_active.is_(True)).all()
+    statuses = db.query(LookupValue.value, LookupValue.label).filter(LookupValue.lookup_type == "STATUS", LookupValue.is_active.is_(True)).all()
+    severities = db.query(LookupValue.value, LookupValue.label).filter(LookupValue.lookup_type == "SEVERITY", LookupValue.is_active.is_(True)).all()
+    domains = db.query(LookupValue.value, LookupValue.label).filter(LookupValue.lookup_type == "DOMAIN", LookupValue.is_active.is_(True)).all()
+    categories = db.query(LookupValue.value, LookupValue.label).filter(LookupValue.lookup_type == "CATEGORY", LookupValue.is_active.is_(True)).all()
+    
+    return templates.TemplateResponse(
+        request,
+        "visualization.html",
+        {
+            "issues_json": issues_json,
+            "projects": projects,
+            "repositories": repositories,
+            "statuses": statuses,
+            "severities": severities,
+            "domains": domains,
+            "categories": categories,
+        }
+    )
 
 @router.get("/help", response_class=HTMLResponse)
 def get_help_home(request: Request):

@@ -3,6 +3,28 @@
 {% block title %}Issues - Tessallite Issue Hub{% endblock %}
 
 {% block content %}
+<!-- Active Project Selector Context (Section 19.3) -->
+<div class="card p-3 bg-white mb-4 shadow-sm border-0" style="border-radius:12px;">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div class="d-flex align-items-center gap-3">
+            <div class="rounded bg-light p-2 text-success" style="background-color: #F2F7F4 !important;"><i class="fa-solid fa-folder-open fa-lg"></i></div>
+            <div>
+                <h5 class="fw-bold mb-0 text-dark">Central Issue Ledger</h5>
+                <p class="text-muted small mb-0">Browse, filter, and track tasks for your projects.</p>
+            </div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <label for="activeProjectSelector" class="small fw-bold text-muted text-nowrap mb-0"><i class="fa-solid fa-filter me-1"></i> Project Context:</label>
+            <select class="form-select form-select-sm fw-bold border-dark-subtle" id="activeProjectSelector" style="width: 220px; border-radius: 8px;" onchange="updateProjectContext(this.value)">
+                <option value="">All Projects</option>
+                {% for p in projects %}
+                <option value="{{ p[0] }}" {% if project_filter == p[0] %}selected{% endif %}>{{ p[1] or p[0] }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+</div>
+
 <!-- Summary Counts Row (Section 19.3) -->
 <div class="row g-3 mb-4">
     <div class="col-md-2.4 col-sm-6 col-12" style="flex: 1;">
@@ -249,4 +271,20 @@
     </div>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function updateProjectContext(project) {
+    const url = new URL(window.location.href);
+    if (project) {
+        url.searchParams.set("project", project);
+    } else {
+        url.searchParams.delete("project");
+    }
+    // Reset offset when changing project context
+    url.searchParams.delete("offset");
+    window.location.href = url.toString();
+}
+</script>
 {% endblock %}
