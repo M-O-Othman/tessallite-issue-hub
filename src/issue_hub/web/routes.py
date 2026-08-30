@@ -412,6 +412,7 @@ def post_edit_issue(
     refs: Optional[str] = Form(None),
     source: Optional[str] = Form(None),
     owner: Optional[str] = Form(None),
+    aka: Optional[str] = Form(None),
     tags_raw: Optional[str] = Form(None),
     recommended_next_step: Optional[str] = Form(None),
     csrf_token: Optional[str] = Form(None),
@@ -447,6 +448,7 @@ def post_edit_issue(
                 refs=refs or None,
                 source=source or None,
                 owner=owner or None,
+                aka=aka or None,
                 recommended_next_step=recommended_next_step or None,
                 tags=tags_list,
             )
@@ -478,6 +480,30 @@ def post_append_description(
         update_issue(db, issue_id, patch)
     except Exception as e:
         logger.error(f"Web append failed: {e}")
+        return render_detail_with_error(request, issue_id, db, str(e))
+        
+    return RedirectResponse(url=f"/issues/{issue_id}", status_code=status.HTTP_303_SEE_OTHER)
+
+@router.post("/issues/{issue_id}/description", response_class=HTMLResponse)
+def post_edit_description(
+    request: Request,
+    issue_id: str,
+    description: str = Form(...),
+    csrf_token: Optional[str] = Form(None),
+    db: Session = Depends(get_db)
+):
+    if not is_authenticated(request):
+        return redirect_to_login()
+        
+    # Verify CSRF Token (Gate 2)
+    if settings.env != "development" and not verify_csrf_token(request, csrf_token):
+        raise HTTPException(status_code=403, detail="CSRF verification failed.")
+
+    try:
+        patch = UpdateIssueRequest(set=UpdateIssueRequestSet(description=description))
+        update_issue(db, issue_id, patch)
+    except Exception as e:
+        logger.error(f"Web edit description failed: {e}")
         return render_detail_with_error(request, issue_id, db, str(e))
         
     return RedirectResponse(url=f"/issues/{issue_id}", status_code=status.HTTP_303_SEE_OTHER)
