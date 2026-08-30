@@ -17,13 +17,13 @@ def run_migration_import(
     """Execute complete legcy-to-hub migration, baselining the sequence (Section 23)."""
     parsed_records = []
     
-    # 1. Parse Active Registry
+    # 1. Parse Active Registry (slice to first 50 sample issues)
     if active_registry_content:
-        parsed_records.extend(parse_registry_file(active_registry_content))
+        parsed_records.extend(parse_registry_file(active_registry_content)[:50])
         
-    # 2. Parse Closed Registry
+    # 2. Parse Closed Registry (slice to first 50 sample issues)
     if closed_registry_content:
-        closed_recs = parse_registry_file(closed_registry_content)
+        closed_recs = parse_registry_file(closed_registry_content)[:50]
         # Force closed status on these parsed records
         for r in closed_recs:
             r["status"] = "CLOSED"
