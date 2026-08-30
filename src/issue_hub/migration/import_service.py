@@ -42,36 +42,43 @@ def run_migration_import(
     if errors:
         return False, errors, report
         
-    # 5. Insert records inside a transaction
+    # 5. Insert records inside a transaction using high-performance bulk mappings (Section 23)
     try:
+        from issue_hub.models import Issue, IssueHistory
+        
+        issues_to_insert = []
+        history_to_insert = []
+        
         for rec in parsed_records:
-            req = CreateIssueRequest(
-                id=rec["issue_id"],
-                project=rec.get("project") or "tessallite",
-                repository=rec.get("repository"),
-                branch=rec.get("branch", "main"),
-                status=rec["status"],
-                severity=rec.get("severity"),
-                title=rec["title"],
-                description=rec["description"],
-                area=rec.get("area"),
-                refs=rec.get("refs"),
-                domain=rec.get("domain"),
-                category=rec.get("category"),
-                owner=rec.get("owner"),
-                recommended_next_step=rec.get("recommended_next_step"),
-                tags=rec.get("tags", []),
-            )
-            issue = create_issue(db, req, import_mode=True)
+            issues_to_insert.append({
+                "issue_id": rec["issue_id"],
+                "sequence_number": rec["sequence_number"],
+                "project": rec.get("project") or "tessallite",
+                "repository": rec.get("repository"),
+                "branch": rec.get("branch", "main"),
+                "status": rec["status"],
+                "severity": rec.get("severity"),
+                "title": rec["title"],
+                "description": rec["description"],
+                "area": rec.get("area"),
+                "refs": rec.get("refs"),
+                "domain": rec.get("domain"),
+                "category": rec.get("category"),
+                "owner": rec.get("owner"),
+                "recommended_next_step": rec.get("recommended_next_step"),
+                "aka": rec.get("aka"),
+                "legacy_raw": rec.get("legacy_raw"),
+                "tags": rec.get("tags", []),
+            })
             
-            # Post-adjust tags/AKA if present
-            if rec.get("aka"):
-                issue.aka = rec["aka"]
-                db.add(issue)
-                
-            if rec.get("legacy_raw"):
-                issue.legacy_raw = rec["legacy_raw"]
-                db.add(issue)
+            history_to_insert.append({
+                "issue_id": rec["issue_id"],
+                "operation": "IMPORT",
+                "note": "Administrative import"
+            })
+            
+        db.bulk_insert_mappings(Issue, issues_to_insert)
+        db.bulk_insert_mappings(IssueHistory, history_to_insert)
                 
         # 6. Baseline Sequence
         baseline = report["calculated_baseline"]

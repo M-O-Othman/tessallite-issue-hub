@@ -32,7 +32,7 @@ def test_parse_legacy_registry_line():
     assert record["aka"] == "XMLA-9627"
     assert record["severity"] == "HIGH"
     assert record["title"] == "XMLA hierarchy owner mismatch"
-    assert record["description"] == "Excel cannot resolve the hierarchy owner. Area: Gateway. Refs: src/xmla.py:45. Domain: gateway. Category: product"
+    assert record["description"] == "Excel cannot resolve the hierarchy owner. Area: Gateway. Refs: src/xmla.py:45. Domain: gateway. Category: product."
     assert record["area"] == "Gateway"
     assert record["refs"] == "src/xmla.py:45"
     assert record["domain"] == "gateway"

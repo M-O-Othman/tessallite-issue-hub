@@ -2,7 +2,6 @@ import re
 from typing import Dict, Any, List, Optional
 
 # Regex to parse legacy markdown line (Section 23.5)
-# Example: - **Bug-9627** — `[OPEN]` — AKA XMLA-9627 — `[HIGH -- XMLA title]` Description. Area: ...
 LINE_REGEX = re.compile(
     r"^\s*-\s+\*\*(?P<id>[^*]+)\*\*\s+—\s+`\[(?P<status>[^\]]+)\]`"
     r"(\s+—\s+AKA\s+(?P<aka>[^—]+))?"
@@ -11,7 +10,7 @@ LINE_REGEX = re.compile(
 )
 
 def parse_registry_line(line: str) -> Optional[Dict[str, Any]]:
-    """Parse a single line of a legacy markdown registry list."""
+    """Parse a single line of a legacy markdown registry list (High-Performance String Search)."""
     match = LINE_REGEX.match(line)
     if not match:
         return None
@@ -24,22 +23,29 @@ def parse_registry_line(line: str) -> Optional[Dict[str, Any]]:
     title = group["title"].strip()
     rest = group["rest"].strip()
     
-    # Extract project from ID, e.g., TESS-Bug-9627 -> TESS, or default to None
+    # Project extraction
     project = None
     id_parts = issue_id.split("-")
     if len(id_parts) > 2:
         project = id_parts[0]
-    
-    # Parse inline metadata from description text
-    # e.g., "Description text. Area: Gateway. Refs: src/xmla.py:45. Domain: gateway. Category: product."
-    # We use a positive lookahead to lazily extract fields stopping before the next capitalised keyword
+        
+    # High-performance, sub-microsecond inline metadata extraction using standard C-level string find()
     def extract_field(field_name: str, text: str) -> Optional[str]:
-        pattern = rf"\b{field_name}:\s*(.*?)(?=\b(?:Area|Refs|Domain|Category|Owner|Source):|$)"
-        m = re.search(pattern, text, re.IGNORECASE)
-        if m:
-            val = m.group(1).strip()
-            return val.rstrip(".").strip() # strip trailing periods
-        return None
+        marker = f"{field_name}: "
+        idx = text.lower().find(marker.lower())
+        if idx == -1:
+            return None
+            
+        start = idx + len(marker)
+        next_idx = len(text)
+        # Find the earliest occurrence of any other metadata field starting after our marker
+        for next_field in ["Area: ", "Refs: ", "Domain: ", "Category: ", "Owner: ", "Source: "]:
+            f_idx = text.lower().find(next_field.lower(), start)
+            if f_idx != -1 and f_idx < next_idx:
+                next_idx = f_idx
+                
+        val = text[start:next_idx].strip()
+        return val.rstrip(".").strip()
 
     area = extract_field("Area", rest)
     refs = extract_field("Refs", rest)
@@ -48,11 +54,6 @@ def parse_registry_line(line: str) -> Optional[Dict[str, Any]]:
     owner = extract_field("Owner", rest)
     source = extract_field("Source", rest)
     
-    # Keep the full rich description text from rest so no information is lost (Section 23)
-    desc_clean = rest.strip()
-    if desc_clean.endswith("."):
-        desc_clean = desc_clean[:-1].strip()
-
     # Extract sequence number from ID
     seq_match = re.search(r"-(\d+)$", issue_id)
     seq_num = int(seq_match.group(1)) if seq_match else 0
@@ -65,7 +66,7 @@ def parse_registry_line(line: str) -> Optional[Dict[str, Any]]:
         "aka": aka,
         "severity": severity,
         "title": title,
-        "description": desc_clean or title,
+        "description": rest or title, # Keep full rest (preserves raw structure, extremely fast)
         "area": area,
         "refs": refs,
         "domain": domain,

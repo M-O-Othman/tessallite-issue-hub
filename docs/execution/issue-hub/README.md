@@ -1,6 +1,8 @@
 # Tessallite Issue Hub - Agent Guide
 
-Tessallite Issue Hub is the sole authoritative system for issue registration, number allocation, and issue tracking. 
+Tessallite Issue Hub is the sole authoritative system for issue registration, number allocation, and issue tracking, designed **specifically for autonomous AI coding agents** working in parallel on a codebase in potentially overlapping areas, or in isolated code trees that need a unified, non-colliding common reference.
+
+*For specific, highly-scoped integration protocols, please read the [AI Agent Handbook](../../Agent.md).*
 
 **Strict Mandates for All Agents:**
 - **Do not** edit the old legacy active or closed markdown registries.

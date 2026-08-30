@@ -171,25 +171,26 @@ def create_issue(db: Session, request: CreateIssueRequest, import_mode: bool = F
                 note="Completed reservation fields"
             )
             db.add(history)
-            db.commit()
-            db.refresh(reserved)
+            if not import_mode:
+                db.commit()
+                db.refresh(reserved)
             return reserved
 
-    # Normal creation/reservation (generate new sequence number)
-    number = db.execute(text("SELECT nextval('issue_number_seq')")).scalar()
-    
-    # Template selection
-    proj = request.project or settings.default_project
-    template = get_project_key_template(db, proj)
-    
-    # If Caller supplied an ID and import mode is active, we use the supplied ID
+    # If Caller supplied an ID and import mode is active, we use the supplied ID and bypass sequence/template DB calls (Section 23)
     if request.id and import_mode:
         issue_id = request.id
-        # Extract sequence number from the supplied ID if possible, otherwise keep the generated sequence number
+        # Extract sequence number from the supplied ID if possible
         match = re.search(r"-(\d+)$", request.id)
-        if match:
-            number = int(match.group(1))
+        number = int(match.group(1)) if match else 0
+        proj = request.project or settings.default_project
     else:
+        # Normal creation/reservation (generate new sequence number)
+        number = db.execute(text("SELECT nextval('issue_number_seq')")).scalar()
+        
+        # Template selection
+        proj = request.project or settings.default_project
+        template = get_project_key_template(db, proj)
+        
         issue_id = render_issue_id(
             template=template,
             number=number,
@@ -241,8 +242,9 @@ def create_issue(db: Session, request: CreateIssueRequest, import_mode: bool = F
         after_record=issue.to_dict(),
     )
     db.add(history)
-    db.commit()
-    db.refresh(issue)
+    if not import_mode:
+        db.commit()
+        db.refresh(issue)
     return issue
 
 
