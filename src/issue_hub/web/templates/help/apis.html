@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}REST APIs - Help Center{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <!-- Chained Navigation Header -->
+        <div class="card p-2 bg-light mb-4 border d-flex flex-row justify-content-between align-items-center">
+            <a href="/help" class="fw-bold text-dark text-decoration-none"><i class="fa-solid fa-arrow-left me-1"></i> Prev: Help Home</a>
+            <span class="text-muted small"><i class="fa-solid fa-network-wired me-1"></i> REST APIs</span>
+            <a href="/help/cli" class="fw-bold text-dark text-decoration-none">Next: Agent CLI <i class="fa-solid fa-arrow-right ms-1"></i></a>
+        </div>
+
+        <div class="card p-5 bg-white shadow-sm mb-4">
+            <h2 class="fw-bold text-dark mb-4"><i class="fa-solid fa-network-wired text-primary me-2"></i>1. REST API Specification</h2>
+            <p class="text-muted fs-6">The Issue Hub exposes a stateless HTTP REST API under `/api/v1/` designed for automated software agents and remote tooling.</p>
+
+            <h5 class="fw-bold text-secondary border-bottom pb-2 mt-4">A. Authentication Model</h5>
+            <p class="small text-muted">All read and write API endpoints are authenticated using a shared **Bearer Token** configured in the server environment as `ISSUE_HUB_API_TOKEN` (default: `api_bearer_token_123`). Requests must supply this token in the header:</p>
+            <pre class="font-monospace small">Authorization: Bearer api_bearer_token_123</pre>
+
+            <h5 class="fw-bold text-secondary border-bottom pb-2 mt-4">B. Core API Endpoints</h5>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover border align-middle mb-4">
+                    <thead class="table-light small uppercase font-monospace">
+                        <tr>
+                            <th style="width: 150px;">Method & Path</th>
+                            <th style="width: 200px;">Description</th>
+                            <th>Request Body Schema</th>
+                        </tr>
+                    </thead>
+                    <tbody class="small font-monospace">
+                        <tr>
+                            <td><span class="badge bg-success">POST</span> <code>/api/v1/issues</code></td>
+                            <td>Create complete issue or reserve a sequence number.</td>
+                            <td><code>{"reserve": bool, "project": "tessallite", "severity": "HIGH", "description": "Markdown text..."}</code></td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge bg-primary">GET</span> <code>/api/v1/issues</code></td>
+                            <td>Wide search / list issues. Passing <code>q=search_phrase</code> executes an all-inclusive query matching against every single attribute (ID, sequence number, status, severity, tags, branch, owner, etc.) joined via OR operators.</td>
+                            <td>Query Params: <code>q=search_phrase</code>, <code>id=Bug-9627</code>, <code>is_retired=true</code>, <code>limit=100</code>, <code>offset=0</code></td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge bg-warning text-dark">PATCH</span> <code>/api/v1/issues/{issue_id}</code></td>
+                            <td>Modify fields, append logs to description, or retire entries.</td>
+                            <td><code>{"set": {"status": "FIXED"}, "append_description": "Comment text...", "retire": {"reason": "DUPLICATE"}}</code></td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge bg-primary">GET</span> <code>/api/v1/issues/{issue_id}/history</code></td>
+                            <td>Retrieve chronological audit log snapshots with before/after states.</td>
+                            <td>None (Response: JSON array of log state entries)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h5 class="fw-bold text-secondary border-bottom pb-2 mt-4">C. Flat Error Shape Contract</h5>
+            <p class="small text-muted">API errors bypass nested Detail keys, returning a flat, predictable JSON error schema matching Section 16.8:</p>
+            <pre class="font-monospace small">{
+  "ok": false,
+  "error": {
+    "code": "AUTHENTICATION_FAILED",
+    "message": "Invalid or missing Bearer token",
+    "details": {}
+  }
+}</pre>
+            <p class="small text-muted">Standard error codes: <code>AUTHENTICATION_FAILED</code> (401), <code>ISSUE_NOT_FOUND</code> (404), <code>IMPORT_CONFLICT</code> (409), <code>DATABASE_UNAVAILABLE</code> (503), and <code>INVALID_REQUEST</code> (400).</p>
+        </div>
+
+        <!-- Chained Navigation Footer -->
+        <div class="card p-3 bg-light border d-flex flex-row justify-content-between align-items-center">
+            <a href="/help" class="btn btn-outline-dark btn-sm"><i class="fa-solid fa-arrow-left me-1"></i> Help Home</a>
+            <span class="text-muted small">Tessallite Issue Hub v1.0</span>
+            <a href="/help/cli" class="btn btn-dark btn-sm font-monospace">Next Page: /help/cli <i class="fa-solid fa-arrow-right ms-1"></i></a>
+        </div>
+    </div>
+</div>
+{% endblock %}

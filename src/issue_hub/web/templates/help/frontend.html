@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Web UI - Help Center{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <!-- Chained Navigation Header -->
+        <div class="card p-2 bg-light mb-4 border d-flex flex-row justify-content-between align-items-center">
+            <a href="/help/cli" class="fw-bold text-dark text-decoration-none"><i class="fa-solid fa-arrow-left me-1"></i> Prev: Agent CLI</a>
+            <span class="text-muted small"><i class="fa-solid fa-desktop me-1"></i> Web UI Portal</span>
+            <a href="/help/migration" class="fw-bold text-dark text-decoration-none">Next: Migration <i class="fa-solid fa-arrow-right ms-1"></i></a>
+        </div>
+
+        <div class="card p-5 bg-white shadow-sm mb-4">
+            <h2 class="fw-bold text-dark mb-4"><i class="fa-solid fa-desktop text-warning me-2"></i>3. Interactive Web UI Portal</h2>
+            <p class="text-muted fs-6">The Issue Hub provides a secure, server-rendered Web UI built using Python FastAPI, Jinja2 template engines, and Bootstrap 5, allowing humans to audit and manage the issue registry.</p>
+
+            <h5 class="fw-bold text-secondary border-bottom pb-2 mt-4">A. Security and Sessions</h5>
+            <p class="small text-muted">Web access requires logging in with admin credentials configured through environment secrets (`ISSUE_HUB_WEB_USERNAME` / `ISSUE_HUB_WEB_PASSWORD_HASH`). Upon authentication, an encrypted, signed session cookie (`issue_hub_session`) is created using Starlette's `SessionMiddleware` to track state securely and statelessly.</p>
+
+            <h5 class="fw-bold text-secondary border-bottom pb-2 mt-4">B. Portal Pages</h5>
+            
+            <p class="small fw-bold text-dark mb-1">1. Summary Dashboard & Filter List:</p>
+            <p class="small text-muted mb-2">Displays real-time metric counter cards (All Issues, Open, Closed, Reserved, Retired) and provides multi-variable dropdown controls to filter the ledger list cleanly. Empty selection values are automatically normalized to prevent database query syntax issues.</p>
+            
+            <p class="small fw-bold text-dark mb-1">2. Interactive Creation / Reservation Form:</p>
+            <p class="small text-muted mb-2">Allows creating full issues or pre-allocating reserved IDs instantly. The form normalizes input parameters, converts illegal filename characters to dashes, collapses duplicate dashes, and displays a dynamic preview of the generated canonical ID (e.g. <code>tessallite-Bug-9592</code>) based on the project's key template.</p>
+            
+            <p class="small fw-bold text-dark mb-1">3. Detailed Markdown rendering and Audit Timelines:</p>
+            <p class="small text-muted mb-2">Displays issue descriptions with styled Markdown rendering (such as headings, lists, tables, and spacing). Includes direct controls to edit metadata fields, append discussion notes with automatic server timezone stamps, or retire duplicate records with explicit duplicate references.</p>
+
+            <p class="small fw-bold text-dark mb-1">4. Snapshot Deltas Collapsible Logs:</p>
+            <p class="small text-muted mb-0">Every issue mutation (creation, reservation, updates, commenting, retirement) writes a record to the <code>issue_history</code> table. The Web portal lists these log entries as an interactive timeline, allowing administrators to expand collapsible panels and inspect raw before/after JSON dictionary representation diffs.</p>
+        </div>
+
+        <!-- Chained Navigation Footer -->
+        <div class="card p-3 bg-light border d-flex flex-row justify-content-between align-items-center">
+            <a href="/help/cli" class="btn btn-outline-dark btn-sm"><i class="fa-solid fa-arrow-left me-1"></i> Agent CLI</a>
+            <span class="text-muted small">Tessallite Issue Hub v1.0</span>
+            <a href="/help/migration" class="btn btn-dark btn-sm font-monospace">Next Page: /help/migration <i class="fa-solid fa-arrow-right ms-1"></i></a>
+        </div>
+    </div>
+</div>
+{% endblock %}

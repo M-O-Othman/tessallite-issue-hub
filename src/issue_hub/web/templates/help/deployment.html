@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Deployment - Help Center{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <!-- Chained Navigation Header -->
+        <div class="card p-2 bg-light mb-4 border d-flex flex-row justify-content-between align-items-center">
+            <a href="/help/migration" class="fw-bold text-dark text-decoration-none"><i class="fa-solid fa-arrow-left me-1"></i> Prev: Migration</a>
+            <span class="text-muted small"><i class="fa-solid fa-cubes me-1"></i> Single Container Deployment</span>
+            <a href="/help" class="fw-bold text-dark text-decoration-none">Next: Help Home <i class="fa-solid fa-arrow-right ms-1"></i></a>
+        </div>
+
+        <div class="card p-5 bg-white shadow-sm mb-4">
+            <h2 class="fw-bold text-dark mb-4"><i class="fa-solid fa-cubes text-danger me-2"></i>5. Single Container Deployment</h2>
+            <p class="text-muted fs-6">The Issue Hub features a highly optimized, standalone **Single Container Deployment Architecture** that packs both the database and the web service into a single isolated context.</p>
+
+            <h5 class="fw-bold text-secondary border-bottom pb-2 mt-4">A. Merged Container Layout</h5>
+            <p class="small text-muted">To eliminate latency, complex network meshes, and multi-container overhead, the stack is unified into a standalone Debian-based container (derived from <code>python:3.12-slim</code>) that runs both PostgreSQL 17 and FastAPI simultaneously inside the same container environment.</p>
+
+            <h5 class="fw-bold text-secondary border-bottom pb-2 mt-4">B. Autonomous Entrypoint Script (`entrypoint.sh`)</h5>
+            <p class="small text-muted">The container's execution flow is directed entirely through a shell entrypoint script that handles full service initialization on container boot:</p>
+            <ol class="small text-muted">
+                <li>**Directories & Permissions:** Creates required log directories and sets permissions for the <code>postgres</code> system role.</li>
+                <li>**Enforced UTF-8 Cluster:** Scans the data volume, and if empty, runs <code>initdb</code> with explicit <code>--encoding=UTF8</code> parameters, preventing string parsing errors on SQLAlchemy database connections.</li>
+                <li>**Database Bootstrap:** Starts PostgreSQL in the background, waits for it to become ready, creates the database roles and schema if missing, and grants owner permissions.</li>
+                <li>**Automatic Migrations:** Automatically executes Alembic upgrades (<code>alembic upgrade head</code>) to ensure the tables are fully up-to-date and seeded on every container start.</li>
+                <li>**Application Server:** Starts uvicorn in the foreground on port <code>8080</code>.</li>
+            </ol>
+
+            <h5 class="fw-bold text-secondary border-bottom pb-2 mt-4">C. Docker Compose and Environment</h5>
+            <p class="small text-muted">Deploying the stack is as simple as launching compose. The configuration uses standard volumes to store data persistently:</p>
+            <pre class="font-monospace small bg-light p-2 border">services:
+  app:
+    build: .
+    container_name: issue-hub-app
+    ports:
+      - "8080:8080" # Web UI & API
+      - "5432:5432" # Published DB Port
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - .:/app</pre>
+            <p class="small text-muted">Data volume <code>pgdata</code> maps database cluster files outside the container, ensuring that all 3,500+ records are kept fully durable across restarts, container rebuilds, and system sweeps.</p>
+        </div>
+
+        <!-- Chained Navigation Footer -->
+        <div class="card p-3 bg-light border d-flex flex-row justify-content-between align-items-center">
+            <a href="/help/migration" class="btn btn-outline-dark btn-sm"><i class="fa-solid fa-arrow-left me-1"></i> Legacy Migration</a>
+            <span class="text-muted small">Tessallite Issue Hub v1.0</span>
+            <a href="/help" class="btn btn-dark btn-sm font-monospace">Next Page: Help Home <i class="fa-solid fa-arrow-right ms-1"></i></a>
+        </div>
+    </div>
+</div>
+{% endblock %}

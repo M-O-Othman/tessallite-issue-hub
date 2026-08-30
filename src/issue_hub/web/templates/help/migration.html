@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}Migration - Help Center{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <!-- Chained Navigation Header -->
+        <div class="card p-2 bg-light mb-4 border d-flex flex-row justify-content-between align-items-center">
+            <a href="/help/frontend" class="fw-bold text-dark text-decoration-none"><i class="fa-solid fa-arrow-left me-1"></i> Prev: Web UI</a>
+            <span class="text-muted small"><i class="fa-solid fa-file-import me-1"></i> Legacy Migration</span>
+            <a href="/help/deployment" class="fw-bold text-dark text-decoration-none">Next: Deployment <i class="fa-solid fa-arrow-right ms-1"></i></a>
+        </div>
+
+        <div class="card p-5 bg-white shadow-sm mb-4">
+            <h2 class="fw-bold text-dark mb-4"><i class="fa-solid fa-file-import text-info me-2"></i>4. Legacy Migration Tooling</h2>
+            <p class="text-muted fs-6">The Tessallite Issue Hub includes integrated, administrative migration modules to ingest, parse, validate, and baseline legacy Git/Markdown-based registries and intakes cleanly.</p>
+
+            <h5 class="fw-bold text-secondary border-bottom pb-2 mt-4">A. Legacy Markdown List Parser</h5>
+            <p class="small text-muted">The <code>registry_parser.py</code> file contains robust regular expressions designed to parse the legacy registry list structure (Section 23.5):</p>
+            <pre class="font-monospace small bg-light p-2 border">- **Bug-9627** — `[OPEN]` — AKA XMLA-9627 — `[HIGH -- XMLA title]` Description. Area: Gateway. Refs: src/xmla.py:45. Domain: gateway.</pre>
+            <p class="small text-muted">The parser extracts canonical issue IDs, statuses, AKA aliases, severity, title, and description text while cleanly isolating trailing inline metadata keys (Area, Refs, Domain, Category, Owner, Source) through custom lazy positive-lookahead groups.</p>
+
+            <h5 class="fw-bold text-secondary border-bottom pb-2 mt-4">B. Frontmatter Intake Parser</h5>
+            <p class="small text-muted">The <code>intake_parser.py</code> file reads legacy un-promoted markdown files containing YAML-like frontmatter blocks (Section 23.6):</p>
+            <pre class="font-monospace small bg-light p-2 border">---
+title: XMLA dax timeout
+severity: CRITICAL
+status: OPEN
+---
+## Description
+Detailed trace logs...</pre>
+            <p class="small text-muted">It separates metadata from body text, extracts parameters, and resolves the description, omitting redundant title headers while preserving styled sectional descriptions.</p>
+
+            <h5 class="fw-bold text-secondary border-bottom pb-2 mt-4">C. Reconciliation, Conflict Safety & Baselining</h5>
+            <p class="small text-muted">Before records are inserted, <code>reconcile.py</code> validates imported records, tracks unique constraints within the import set, scans for duplication conflicts against the live database, and resolves AKA collisions (per Section 23.3) by ignoring duplicate aliases while successfully importing the rest of their data.</p>
+            <p class="small text-muted">Following a successful validation dry-run, the database transaction is executed and the PostgreSQL sequence value is automatically baselined (using the maximum imported sequence index plus 1), ensuring that any subsequent allocation resumes perfectly after the highest legacy issue number.</p>
+        </div>
+
+        <!-- Chained Navigation Footer -->
+        <div class="card p-3 bg-light border d-flex flex-row justify-content-between align-items-center">
+            <a href="/help/frontend" class="btn btn-outline-dark btn-sm"><i class="fa-solid fa-arrow-left me-1"></i> Web UI Portal</a>
+            <span class="text-muted small">Tessallite Issue Hub v1.0</span>
+            <a href="/help/deployment" class="btn btn-dark btn-sm font-monospace">Next Page: /help/deployment <i class="fa-solid fa-arrow-right ms-1"></i></a>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Agent CLI - Help Center{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <!-- Chained Navigation Header -->
+        <div class="card p-2 bg-light mb-4 border d-flex flex-row justify-content-between align-items-center">
+            <a href="/help/apis" class="fw-bold text-dark text-decoration-none"><i class="fa-solid fa-arrow-left me-1"></i> Prev: REST APIs</a>
+            <span class="text-muted small"><i class="fa-solid fa-terminal me-1"></i> Agent CLI</span>
+            <a href="/help/frontend" class="fw-bold text-dark text-decoration-none">Next: Web UI <i class="fa-solid fa-arrow-right ms-1"></i></a>
+        </div>
+
+        <div class="card p-5 bg-white shadow-sm mb-4">
+            <h2 class="fw-bold text-dark mb-4"><i class="fa-solid fa-terminal text-success me-2"></i>2. Non-Interactive CLI (`issue`)</h2>
+            <p class="text-muted fs-6">The <code>issue</code> command-line client is a zero-dependency Python utility designed for seamless execution inside shell scripts and by autonomous AI agents.</p>
+
+            <h5 class="fw-bold text-secondary border-bottom pb-2 mt-4">A. Configuration Precedence</h5>
+            <p class="small text-muted">The CLI evaluates parameters using a strict, predictable precedence chain (Section 17.2):</p>
+            <ol class="small text-muted">
+                <li>**Command-Line Option Override** (e.g. <code>--url</code>, <code>--token</code>)</li>
+                <li>**Environment Variables** (e.g. <code>ISSUE_HUB_URL</code>, <code>ISSUE_HUB_TOKEN</code>, <code>ISSUE_HUB_PROJECT</code>, <code>ISSUE_HUB_REPOSITORY</code>)</li>
+                <li>**User Configuration File** loaded from OS-specific paths:
+                    <ul>
+                        <li>**Linux/macOS:** <code>~/.config/tessallite-issue-hub/config.json</code></li>
+                        <li>**Windows:** <code>%APPDATA%\Tessallite\IssueHub\config.json</code></li>
+                    </ul>
+                </li>
+            </ol>
+
+            <h5 class="fw-bold text-secondary border-bottom pb-2 mt-4">B. Advisory Git Discovery</h5>
+            <p class="small text-muted">If options are absent, the CLI runs background, non-blocking subprocess commands (Section 17.5) to auto-discover parameters from the local repository context:</p>
+            <ul class="small text-muted">
+                <li>**Worktree Path:** <code>git rev-parse --show-toplevel</code></li>
+                <li>**Current Branch:** <code>git rev-parse --abbrev-ref HEAD</code></li>
+                <li>**Repository Name:** Extracted from <code>git config --get remote.origin.url</code> (parsed to isolate the project repo name).</li>
+            </ul>
+
+            <h5 class="fw-bold text-secondary border-bottom pb-2 mt-4">C. Standard Command Examples</h5>
+            
+            <p class="small fw-bold text-dark mb-1">Create Complete Issue:</p>
+            <pre class="font-monospace small bg-light p-2 border">issue create --severity HIGH --title "Dax timeout" --description "Timeout on multi-level filters."</pre>
+
+            <p class="small fw-bold text-dark mb-1">Reserve Number with Zero Details:</p>
+            <pre class="font-monospace small bg-light p-2 border">issue create --reserve</pre>
+
+            <p class="small fw-bold text-dark mb-1">Search or Find:</p>
+            <p class="small text-muted mb-2">Finding by text query executes an all-inclusive wide search across every database column simultaneously (using SQL OR matching). You can search for a sequence number (e.g. <code>9627</code>), a status (e.g. <code>PARTIAL</code>), a tag, an owner, or a description word:</p>
+            <pre class="font-monospace small bg-light p-2 border">issue find Bug-9627 --history
+issue find "9627"
+issue find "hierarchy owner mismatch"</pre>
+
+            <p class="small fw-bold text-dark mb-1">Update Field or Append Description File:</p>
+            <pre class="font-monospace small bg-light p-2 border">issue update Bug-9627 --set status=MITIGATED --set expected_effort=S
+issue update Bug-9627 --append-file closeout_details.md</pre>
+
+            <p class="small fw-bold text-dark mb-1">Retire Duplicate:</p>
+            <pre class="font-monospace small bg-light p-2 border">issue update Bug-9627 --retire DUPLICATE --duplicate-of Bug-9584 --retire-note "Identical path."</pre>
+
+            <h5 class="fw-bold text-secondary border-bottom pb-2 mt-4">D. Standard Exit Code Mapping</h5>
+            <p class="small text-muted">The CLI writes all JSON response bodies directly to `stdout` and returns exit codes (Section 17.4) indicating the exact transaction result:</p>
+            <ul class="small text-muted font-monospace" style="list-style-type: none;">
+                <li><i class="fa-solid fa-circle-check text-success me-2"></i> <code>0</code>: Success (JSON printed on stdout)</li>
+                <li><i class="fa-solid fa-circle-xmark text-danger me-2"></i> <code>2</code>: Invalid Command/Validation Error</li>
+                <li><i class="fa-solid fa-circle-xmark text-danger me-2"></i> <code>3</code>: Authentication Failure (401)</li>
+                <li><i class="fa-solid fa-circle-xmark text-danger me-2"></i> <code>4</code>: Issue Not Found (404)</li>
+                <li><i class="fa-solid fa-circle-xmark text-danger me-2"></i> <code>5</code>: Service Unavailable / Network Timeout</li>
+                <li><i class="fa-solid fa-circle-xmark text-danger me-2"></i> <code>6</code>: Severe Internal Server Error (500)</li>
+            </ul>
+        </div>
+
+        <!-- Chained Navigation Footer -->
+        <div class="card p-3 bg-light border d-flex flex-row justify-content-between align-items-center">
+            <a href="/help/apis" class="btn btn-outline-dark btn-sm"><i class="fa-solid fa-arrow-left me-1"></i> REST APIs</a>
+            <span class="text-muted small">Tessallite Issue Hub v1.0</span>
+            <a href="/help/frontend" class="btn btn-dark btn-sm font-monospace">Next Page: /help/frontend <i class="fa-solid fa-arrow-right ms-1"></i></a>
+        </div>
+    </div>
+</div>
+{% endblock %}

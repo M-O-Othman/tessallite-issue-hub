@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+
+{% block title %}Create Issue - Tessallite Issue Hub{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card shadow-sm bg-white mb-4">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0 fw-bold text-dark"><i class="fa-solid fa-plus me-2"></i>Create or Reserve Issue</h5>
+            </div>
+            
+            <div class="card-body p-4">
+                {% if error %}
+                <div class="alert alert-danger py-2 small" role="alert">
+                    <i class="fa-solid fa-circle-exclamation me-1"></i> {{ error }}
+                </div>
+                {% endif %}
+
+                <form action="/issues/create" method="post" id="create-form">
+                    <!-- Reservation Toggle (Section 19.4) -->
+                    <div class="card p-3 bg-light mb-4 border d-flex flex-row justify-content-between align-items-center">
+                        <div>
+                            <h6 class="fw-bold mb-1"><i class="fa-solid fa-ticket text-info me-1"></i> Reserve Issue ID Mode</h6>
+                            <p class="text-muted small mb-0">Pre-allocate a sequence number immediately. Severity and Description fields are optional in this mode.</p>
+                        </div>
+                        <div class="form-check form-switch fs-5">
+                            <input class="form-check-input" type="checkbox" role="switch" id="reserve" name="reserve" value="true" onchange="toggleReserveMode(this)">
+                        </div>
+                    </div>
+
+                    <!-- ID Preview Box (Section 19.4) -->
+                    <div class="alert alert-secondary py-2 small mb-4 font-monospace d-flex align-items-center">
+                        <i class="fa-solid fa-eye text-muted me-2"></i> ID Preview: <span class="fw-bold ms-1" id="id-preview">{{ global_template.replace('{number}', next_seq|string) }}</span>
+                    </div>
+
+                    <!-- Primary Context Fields -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3 col-sm-6">
+                            <label for="project" class="form-label small fw-bold">Project <span class="text-danger">*</span></label>
+                            <select class="form-select form-select-sm" id="project" name="project" onchange="updateIdPreview()" required>
+                                {% for p in projects %}
+                                <option value="{{ p.value }}">{{ p.label or p.value }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3 col-sm-6">
+                            <label for="repository" class="form-label small fw-bold">Repository <span class="text-danger">*</span></label>
+                            <select class="form-select form-select-sm" id="repository" name="repository" required>
+                                {% for r in repositories %}
+                                <option value="{{ r.value }}">{{ r.label or r.value }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3 col-sm-6">
+                            <label for="branch" class="form-label small fw-bold">Branch</label>
+                            <input type="text" class="form-control form-control-sm" id="branch" name="branch" value="main">
+                        </div>
+                        <div class="col-md-3 col-sm-6">
+                            <label for="id" class="form-label small fw-bold text-muted">Complete Reservation (ID)</label>
+                            <input type="text" class="form-control form-control-sm font-monospace" id="id" name="id" placeholder="Bug-XXXX">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label for="worktree" class="form-label small fw-bold text-muted">Worktree Path</label>
+                            <input type="text" class="form-control form-control-sm" id="worktree" name="worktree" placeholder="/path/to/worktree">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="task" class="form-label small fw-bold text-muted">Task ID</label>
+                            <input type="text" class="form-control form-control-sm" id="task" name="task" placeholder="task-123">
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- Issue Dimensions (Section 19.4) -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3 col-sm-6">
+                            <label for="status_val" class="form-label small fw-bold">Status</label>
+                            <select class="form-select form-select-sm" id="status_val" name="status_val">
+                                {% for s in statuses %}
+                                <option value="{{ s.value }}" {% if s.value == "OPEN" %}selected{% endif %}>{{ s.label or s.value }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3 col-sm-6">
+                            <label for="severity" class="form-label small fw-bold" id="severity-label">Severity <span class="text-danger">*</span></label>
+                            <select class="form-select form-select-sm" id="severity" name="severity" required>
+                                <option value="" disabled selected>[Select Severity]</option>
+                                {% for s in severities %}
+                                <option value="{{ s.value }}">{{ s.label or s.value }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3 col-sm-6">
+                            <label for="priority" class="form-label small fw-bold text-muted">Priority</label>
+                            <select class="form-select form-select-sm" id="priority" name="priority">
+                                <option value="">[None]</option>
+                                {% for p in priorities %}
+                                <option value="{{ p.value }}">{{ p.label or p.value }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3 col-sm-6">
+                            <label for="expected_effort" class="form-label small fw-bold">Expected Effort</label>
+                            <select class="form-select form-select-sm" id="expected_effort" name="expected_effort">
+                                {% for e in efforts %}
+                                <option value="{{ e.value }}" {% if e.value == "UNKNOWN" %}selected{% endif %}>{{ e.label or e.value }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Title & Description (Section 19.4) -->
+                    <div class="mb-3">
+                        <label for="title" class="form-label small fw-bold">Title</label>
+                        <input type="text" class="form-control" id="title" name="title" placeholder="Short descriptive summary (Optional if derived)">
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="description" class="form-label small fw-bold" id="description-label">Description <span class="text-danger">*</span></label>
+                        <textarea class="form-control font-monospace" id="description" name="description" rows="10" placeholder="Provide complete Markdown description..." required></textarea>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- Categorization & References -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3 col-sm-6">
+                            <label for="area" class="form-label small fw-bold text-muted">Area</label>
+                            <input type="text" class="form-control form-control-sm" id="area" name="area" placeholder="Gateway / Dax">
+                        </div>
+                        <div class="col-md-3 col-sm-6">
+                            <label for="classification" class="form-label small fw-bold text-muted">Classification</label>
+                            <input type="text" class="form-control form-control-sm" id="classification" name="classification">
+                        </div>
+                        <div class="col-md-3 col-sm-6">
+                            <label for="domain" class="form-label small fw-bold text-muted">Domain</label>
+                            <select class="form-select form-select-sm" id="domain" name="domain">
+                                <option value="">[None]</option>
+                                {% for d in domains %}
+                                <option value="{{ d.value }}">{{ d.label or d.value }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3 col-sm-6">
+                            <label for="category" class="form-label small fw-bold text-muted">Category</label>
+                            <select class="form-select form-select-sm" id="category" name="category">
+                                <option value="">[None]</option>
+                                {% for c in categories %}
+                                <option value="{{ c.value }}">{{ c.label or c.value }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <label for="refs" class="form-label small fw-bold text-muted">References (Files / Lines)</label>
+                            <input type="text" class="form-control form-control-sm" id="refs" name="refs" placeholder="src/main.py:123">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="source" class="form-label small fw-bold text-muted">Source</label>
+                            <input type="text" class="form-control form-control-sm" id="source" name="source" placeholder="Agent review">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="tags_raw" class="form-label small fw-bold text-muted">Tags (Comma-separated)</label>
+                            <input type="text" class="form-control form-control-sm" id="tags_raw" name="tags_raw" placeholder="excel, xmla, perf">
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="recommended_next_step" class="form-label small fw-bold text-muted">Recommended Next Step / Remediation Plan</label>
+                        <textarea class="form-control font-monospace" id="recommended_next_step" name="recommended_next_step" rows="5" placeholder="Specify complete remediation plans or recommended next steps..."></textarea>
+                    </div>
+
+                    <div class="d-flex justify-content-end">
+                        <a href="/" class="btn btn-outline-secondary me-2 px-4 py-2">Cancel</a>
+                        <button type="submit" class="btn btn-dark px-5 py-2 text-uppercase fw-bold" id="submit-btn"><i class="fa-solid fa-save me-1"></i> Create Issue</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleReserveMode(checkbox) {
+    const severityInput = document.getElementById("severity");
+    const descriptionInput = document.getElementById("description");
+    const severityLabel = document.getElementById("severity-label");
+    const descriptionLabel = document.getElementById("description-label");
+    const submitBtn = document.getElementById("submit-btn");
+    const statusSelect = document.getElementById("status_val");
+
+    if (checkbox.checked) {
+        severityInput.removeAttribute("required");
+        descriptionInput.removeAttribute("required");
+        severityLabel.innerHTML = 'Severity';
+        descriptionLabel.innerHTML = 'Description';
+        submitBtn.innerHTML = '<i class="fa-solid fa-ticket me-1"></i> Reserve ID';
+        statusSelect.value = "RESERVED";
+    } else {
+        severityInput.setAttribute("required", "required");
+        descriptionInput.setAttribute("required", "required");
+        severityLabel.innerHTML = 'Severity <span class="text-danger">*</span>';
+        descriptionLabel.innerHTML = 'Description <span class="text-danger">*</span>';
+        submitBtn.innerHTML = '<i class="fa-solid fa-save me-1"></i> Create Issue';
+        statusSelect.value = "OPEN";
+    }
+}
+
+function updateIdPreview() {
+    const projectSelect = document.getElementById("project");
+    const selectedProj = projectSelect.value;
+    const previewEl = document.getElementById("id-preview");
+    
+    // Normalization preview rule
+    let normProj = selectedProj.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    normProj = normProj.replace(/^-+|-+$/g, "");
+    
+    if (selectedProj && selectedProj !== "tessallite") {
+        previewEl.innerText = `${normProj}-Bug-{{ next_seq }}`;
+    } else {
+        previewEl.innerText = `Bug-{{ next_seq }}`;
+    }
+}
+
+// Read URL params to trigger reserve mode directly
+document.addEventListener("DOMContentLoaded", function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('reserve') === '1') {
+        const switchBtn = document.getElementById("reserve");
+        if (switchBtn) {
+            switchBtn.checked = true;
+            toggleReserveMode(switchBtn);
+        }
+    }
+    updateIdPreview();
+});
+</script>
+{% endblock %}

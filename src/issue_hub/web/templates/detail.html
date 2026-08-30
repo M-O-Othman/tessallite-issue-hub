@@ -1,0 +1,304 @@
+{% extends "base.html" %}
+
+{% block title %}{{ issue.issue_id }} - Tessallite Issue Hub{% endblock %}
+
+{% block content %}
+<!-- Back Navigation Button -->
+<div class="mb-3">
+    <a href="/" class="btn btn-outline-dark btn-sm"><i class="fa-solid fa-arrow-left me-1"></i> Back to Ledger</a>
+</div>
+
+<div class="row g-4">
+    <!-- Left Column: Details & Append & History (Section 19.5) -->
+    <div class="col-lg-8">
+        <!-- Main Details Header -->
+        <div class="card p-4 bg-white mb-4 shadow-sm {% if issue.is_retired %}border-danger{% endif %}">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+                <div>
+                    <span class="text-muted small uppercase fw-bold font-monospace">Identity: {{ issue.sequence_number }}</span>
+                    <h2 class="fw-bold mb-1 {% if issue.is_retired %}text-decoration-line-through text-secondary{% else %}text-dark{% endif %}">
+                        {{ issue.issue_id }}
+                    </h2>
+                    {% if issue.aka %}
+                    <div class="text-muted font-monospace"><i class="fa-solid fa-tags me-1"></i> AKA Aliases: <span class="fw-bold">{{ issue.aka }}</span></div>
+                    {% endif %}
+                </div>
+                <div>
+                    {% if issue.is_retired %}
+                    <span class="badge bg-danger fs-6 py-2 px-3"><i class="fa-solid fa-ban me-1"></i> RETIRED: {{ issue.retire_reason }}</span>
+                    {% elif issue.status == "RESERVED" %}
+                    <span class="badge bg-info text-dark fs-6 py-2 px-3"><i class="fa-solid fa-ticket me-1"></i> RESERVED</span>
+                    {% elif issue.status == "OPEN" %}
+                    <span class="badge bg-warning text-dark fs-6 py-2 px-3"><i class="fa-solid fa-circle-dot me-1"></i> OPEN</span>
+                    {% elif issue.status == "FIXED" or issue.status == "CLOSED" or issue.status == "RESOLVED" %}
+                    <span class="badge bg-success fs-6 py-2 px-3"><i class="fa-solid fa-circle-check me-1"></i> CLOSED</span>
+                    {% else %}
+                    <span class="badge bg-secondary fs-6 py-2 px-3">{{ issue.status }}</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if issue.is_retired %}
+            <div class="alert alert-danger py-2 small mb-4">
+                <h6 class="fw-bold mb-1"><i class="fa-solid fa-triangle-exclamation me-1"></i> Retired Issue Record</h6>
+                <div><strong>Reason:</strong> {{ issue.retire_reason }}</div>
+                {% if issue.duplicate_of %}
+                <div><strong>Duplicate of:</strong> <a href="/issues/{{ issue.duplicate_of }}" class="fw-bold text-danger">{{ issue.duplicate_of }}</a></div>
+                {% endif %}
+                {% if issue.retire_note %}
+                <div class="mt-1"><strong>Note:</strong> {{ issue.retire_note }}</div>
+                {% endif %}
+                <div class="mt-1 text-muted font-monospace" style="font-size: 0.75rem;">Retired at {{ issue.retired_at }}</div>
+            </div>
+            {% endif %}
+
+            <h4 class="fw-bold text-dark mt-2 mb-3">{{ issue.title or "[No Title]" }}</h4>
+            
+            <hr class="my-3">
+            
+            <!-- Description Container (Rendered Markdown - Section 19.5) -->
+            <div class="markdown-body p-2" style="background-color: #fdfdfd; border-radius: 4px;">
+                {% if issue.description %}
+                {{ issue.description|markdown|safe }}
+                {% else %}
+                <p class="text-muted italic mb-0">No description provided yet for this issue.</p>
+                {% endif %}
+            </div>
+
+            {% if issue.recommended_next_step %}
+            <hr class="my-3">
+            <h5 class="fw-bold text-dark mb-2"><i class="fa-solid fa-circle-play text-success me-2"></i>Recommended Next Step / Remediation Plan</h5>
+            <div class="markdown-body p-3 bg-light border border-light rounded" style="border-radius: 8px;">
+                {{ issue.recommended_next_step|markdown|safe }}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Append Text Form (Section 15 & Section 19.5) -->
+        <div class="card p-4 bg-white mb-4 shadow-sm">
+            <h5 class="fw-bold text-dark mb-3"><i class="fa-solid fa-message-paragraph me-2 text-secondary"></i>Append Discussion / Note</h5>
+            <form action="/issues/{{ issue.issue_id }}/append" method="post">
+                <div class="mb-3">
+                    <textarea class="form-control font-monospace" name="append_text" rows="5" placeholder="Add update review, code trace, or validation logs..." required></textarea>
+                </div>
+                <div class="d-flex justify-content-end">
+                    <button type="submit" class="btn btn-dark px-4"><i class="fa-solid fa-square-plus me-1"></i> Append Comment</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- History Audit Timeline (Section 16.5 & Section 19.5) -->
+        <div class="card p-4 bg-white mb-4 shadow-sm">
+            <h5 class="fw-bold text-dark mb-3"><i class="fa-solid fa-clock-rotate-left me-2 text-secondary"></i>Mutation History</h5>
+            <div class="position-relative ps-4 border-start py-2">
+                {% if not history %}
+                <p class="text-muted small italic">No history logged yet.</p>
+                {% else %}
+                {% for log in history %}
+                <div class="mb-4 position-relative">
+                    <!-- Dot -->
+                    <div class="position-absolute rounded-circle bg-dark border border-white" style="width: 12px; height: 12px; left: -31px; top: 6px;"></div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="badge bg-light text-dark border small fw-bold font-monospace">{{ log.operation }}</span>
+                        <span class="small text-muted font-monospace">{{ log.changed_at.isoformat()[:16].replace('T', ' ') }} UTC</span>
+                    </div>
+                    {% if log.note %}
+                    <div class="small fw-semibold text-secondary mt-1"><i class="fa-solid fa-comment-dots me-1"></i> {{ log.note }}</div>
+                    {% endif %}
+                    
+                    {% if log.operation == "UPDATE" or log.operation == "APPEND" or log.operation == "RETIRE" %}
+                    <!-- Show changes collapsible -->
+                    <div class="mt-2">
+                        <button class="btn btn-link btn-sm p-0 text-muted text-decoration-none small" type="button" data-bs-toggle="collapse" data-bs-target="#log-{{ log.history_id }}">
+                            <i class="fa-solid fa-code me-1"></i> View Snapshot Delta
+                        </button>
+                        <div class="collapse mt-2" id="log-{{ log.history_id }}">
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <div class="small fw-bold text-muted mb-1">Before Record</div>
+                                    <pre class="bg-light p-2 small border font-monospace" style="max-height: 150px; overflow-y: auto; font-size: 0.75rem;">{{ log.before_record|tojson(indent=2) }}</pre>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="small fw-bold text-muted mb-1">After Record</div>
+                                    <pre class="bg-light p-2 small border font-monospace" style="max-height: 150px; overflow-y: auto; font-size: 0.75rem;">{{ log.after_record|tojson(indent=2) }}</pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: Edit form & Retirement Forms (Section 19.5) -->
+    <div class="col-lg-4">
+        <!-- Fields Edit Panel -->
+        <div class="card p-4 bg-white mb-4 shadow-sm">
+            <h5 class="fw-bold text-dark mb-3"><i class="fa-solid fa-pen-to-square me-2 text-secondary"></i>Update Metadata</h5>
+            <form action="/issues/{{ issue.issue_id }}/edit" method="post">
+                <div class="mb-3">
+                    <label for="project" class="form-label small fw-bold">Project</label>
+                    <select class="form-select form-select-sm" id="project" name="project" required>
+                        {% for p in projects %}
+                        <option value="{{ p.value }}" {% if issue.project == p.value %}selected{% endif %}>{{ p.label or p.value }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="repository" class="form-label small fw-bold">Repository</label>
+                    <select class="form-select form-select-sm" id="repository" name="repository" required>
+                        {% for r in repositories %}
+                        <option value="{{ r.value }}" {% if issue.repository == r.value %}selected{% endif %}>{{ r.label or r.value }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="branch" class="form-label small fw-bold">Branch</label>
+                    <input type="text" class="form-control form-control-sm" id="branch" name="branch" value="{{ issue.branch }}">
+                </div>
+                <div class="mb-3">
+                    <label for="worktree" class="form-label small fw-bold text-muted">Worktree Path</label>
+                    <input type="text" class="form-control form-control-sm" id="worktree" name="worktree" value="{{ issue.worktree or '' }}">
+                </div>
+                <div class="mb-3">
+                    <label for="status_val" class="form-label small fw-bold">Status</label>
+                    <select class="form-select form-select-sm" id="status_val" name="status_val">
+                        {% for s in statuses %}
+                        <option value="{{ s.value }}" {% if issue.status == s.value %}selected{% endif %}>{{ s.label or s.value }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="severity" class="form-label small fw-bold">Severity</label>
+                    <select class="form-select form-select-sm" id="severity" name="severity">
+                        <option value="">[None]</option>
+                        {% for s in severities %}
+                        <option value="{{ s.value }}" {% if issue.severity == s.value %}selected{% endif %}>{{ s.label or s.value }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="priority" class="form-label small fw-bold text-muted">Priority</label>
+                    <select class="form-select form-select-sm" id="priority" name="priority">
+                        <option value="">[None]</option>
+                        {% for p in priorities %}
+                        <option value="{{ p.value }}" {% if issue.priority == p.value %}selected{% endif %}>{{ p.label or p.value }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="expected_effort" class="form-label small fw-bold">Expected Effort</label>
+                    <select class="form-select form-select-sm" id="expected_effort" name="expected_effort">
+                        {% for e in efforts %}
+                        <option value="{{ e.value }}" {% if issue.expected_effort == e.value %}selected{% endif %}>{{ e.label or e.value }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label for="title" class="form-label small fw-bold">Title</label>
+                    <input type="text" class="form-control form-control-sm" id="title" name="title" value="{{ issue.title }}" required>
+                </div>
+
+                <div class="mb-3">
+                    <label for="area" class="form-label small fw-bold text-muted">Area</label>
+                    <input type="text" class="form-control form-control-sm" id="area" name="area" value="{{ issue.area or '' }}">
+                </div>
+                <div class="mb-3">
+                    <label for="classification" class="form-label small fw-bold text-muted">Classification</label>
+                    <input type="text" class="form-control form-control-sm" id="classification" name="classification" value="{{ issue.classification or '' }}">
+                </div>
+                <div class="mb-3">
+                    <label for="domain" class="form-label small fw-bold text-muted">Domain</label>
+                    <select class="form-select form-select-sm" id="domain" name="domain">
+                        <option value="">[None]</option>
+                        {% for d in domains %}
+                        <option value="{{ d.value }}" {% if issue.domain == d.value %}selected{% endif %}>{{ d.label or d.value }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="category" class="form-label small fw-bold text-muted">Category</label>
+                    <select class="form-select form-select-sm" id="category" name="category">
+                        <option value="">[None]</option>
+                        {% for c in categories %}
+                        <option value="{{ c.value }}" {% if issue.category == c.value %}selected{% endif %}>{{ c.label or c.value }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label for="refs" class="form-label small fw-bold text-muted">References (Files / Lines)</label>
+                    <input type="text" class="form-control form-control-sm" id="refs" name="refs" value="{{ issue.refs or '' }}">
+                </div>
+                <div class="mb-3">
+                    <label for="source" class="form-label small fw-bold text-muted">Source</label>
+                    <input type="text" class="form-control form-control-sm" id="source" name="source" value="{{ issue.source or '' }}">
+                </div>
+                <div class="mb-3">
+                    <label for="owner" class="form-label small fw-bold text-muted">Owner</label>
+                    <input type="text" class="form-control form-control-sm" id="owner" name="owner" value="{{ issue.owner or '' }}">
+                </div>
+                <div class="mb-3">
+                    <label for="tags_raw" class="form-label small fw-bold text-muted">Tags (Comma-separated)</label>
+                    <input type="text" class="form-control form-control-sm" id="tags_raw" name="tags_raw" value="{{ issue.tags|join(', ') }}">
+                </div>
+                <div class="mb-3">
+                    <label for="recommended_next_step" class="form-label small fw-bold text-muted">Recommended Next Step / Remediation Plan</label>
+                    <textarea class="form-control form-control-sm font-monospace" id="recommended_next_step" name="recommended_next_step" rows="4">{{ issue.recommended_next_step or '' }}</textarea>
+                </div>
+
+                <!-- Hidden description textarea to prevent loss on patch -->
+                <textarea name="description" class="d-none">{{ issue.description }}</textarea>
+
+                <button type="submit" class="btn btn-dark btn-sm w-100 py-2 mt-2 text-uppercase fw-bold"><i class="fa-solid fa-save me-1"></i> Save Changes</button>
+            </form>
+        </div>
+
+        <!-- Retire Panel (Section 19.5) -->
+        <div class="card p-4 bg-white mb-4 border-danger shadow-sm">
+            <h5 class="fw-bold text-danger mb-3"><i class="fa-solid fa-ban me-2"></i>Retire Issue</h5>
+            <p class="text-muted small">Retiring makes this issue inactive, indicating it was duplicate, erroneous, or superseded. It remains visible in Git snaps.</p>
+            <form action="/issues/{{ issue.issue_id }}/retire" method="post">
+                <div class="mb-3">
+                    <label for="reason" class="form-label small fw-bold text-danger">Retirement Reason</label>
+                    <select class="form-select form-select-sm" id="reason" name="reason" onchange="toggleDuplicateField(this)" required>
+                        <option value="" disabled selected>[Select Reason]</option>
+                        {% for r in retire_reasons %}
+                        <option value="{{ r.value }}">{{ r.label or r.value }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3 d-none" id="duplicate-field-container">
+                    <label for="duplicate_of" class="form-label small fw-bold text-danger">Duplicate of (Issue ID)</label>
+                    <input type="text" class="form-control form-control-sm font-monospace" id="duplicate_of" name="duplicate_of" placeholder="Bug-9584">
+                </div>
+                <div class="mb-3">
+                    <label for="note" class="form-label small fw-bold text-muted">Retirement Note</label>
+                    <textarea class="form-control form-control-sm" id="note" name="note" rows="3" placeholder="Explanation..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-danger btn-sm w-100 py-2 text-uppercase fw-bold"><i class="fa-solid fa-trash-can me-1"></i> Retire Record</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleDuplicateField(select) {
+    const container = document.getElementById("duplicate-field-container");
+    const dupInput = document.getElementById("duplicate_of");
+    if (select.value === "DUPLICATE") {
+        container.classList.remove("d-none");
+        dupInput.setAttribute("required", "required");
+    } else {
+        container.classList.add("d-none");
+        dupInput.removeAttribute("required");
+    }
+}
+</script>
+{% endblock %}

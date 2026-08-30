@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Help Center - Tessallite Issue Hub{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <!-- Chained Navigation Header -->
+        <div class="card p-2 bg-light mb-4 border d-flex flex-row justify-content-between align-items-center">
+            <span class="text-muted small"><i class="fa-solid fa-home me-1"></i> Help Home</span>
+            <div class="small">
+                <span class="text-muted me-3">Previous: None</span>
+                <a href="/help/apis" class="fw-bold text-dark text-decoration-none">Next: REST APIs <i class="fa-solid fa-arrow-right ms-1"></i></a>
+            </div>
+        </div>
+
+        <div class="card p-5 bg-white shadow-sm mb-4">
+            <div class="text-center mb-5">
+                <h1 class="fw-bold text-dark"><i class="fa-solid fa-circle-question text-primary me-2"></i>Documentation & Help Center</h1>
+                <p class="text-muted fs-5">Learn how to operate, configure, deploy, and integrate with the Tessallite Issue Hub.</p>
+            </div>
+
+            <h4 class="fw-bold mb-4 border-bottom pb-2">Documented Sections</h4>
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <div class="card h-100 p-4 bg-light border hover-shadow">
+                        <h5 class="fw-bold"><a href="/help/apis" class="text-decoration-none text-dark"><i class="fa-solid fa-network-wired text-primary me-2"></i> 1. REST API Specification</a></h5>
+                        <p class="text-muted small mb-0">Endpoints, request/response JSON schemas, authentication mechanics, and custom HTTP error code contracts.</p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card h-100 p-4 bg-light border hover-shadow">
+                        <h5 class="fw-bold"><a href="/help/cli" class="text-decoration-none text-dark"><i class="fa-solid fa-terminal text-success me-2"></i> 2. Non-Interactive CLI (`issue`)</a></h5>
+                        <p class="text-muted small mb-0">Local user configuration precedence, commands, flags, advisory Git environment discovery, and exit code mappings.</p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card h-100 p-4 bg-light border hover-shadow">
+                        <h5 class="fw-bold"><a href="/help/frontend" class="text-decoration-none text-dark"><i class="fa-solid fa-desktop text-warning me-2"></i> 3. Interactive Web UI Portal</a></h5>
+                        <p class="text-muted small mb-0">Dashboard navigation, summary metrics, Markdown-rendered issue detail panels, description appending, and security session cookies.</p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card h-100 p-4 bg-light border hover-shadow">
+                        <h5 class="fw-bold"><a href="/help/migration" class="text-decoration-none text-dark"><i class="fa-solid fa-file-import text-info me-2"></i> 4. Legacy Migration Tooling</a></h5>
+                        <p class="text-muted small mb-0">Parsing active and closed registry Markdown lines, YAML frontmatter file intake, dry-run reconciliation, and sequence baselining.</p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card h-100 p-4 bg-light border hover-shadow">
+                        <h5 class="fw-bold"><a href="/help/deployment" class="text-decoration-none text-dark"><i class="fa-solid fa-cubes text-danger me-2"></i> 5. Deployment & Single Container</a></h5>
+                        <p class="text-muted small mb-0">Single-container architecture, entrypoint startup script, PostgreSQL process initialization, volume mapping, and scaling details.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chained Navigation Footer -->
+        <div class="card p-3 bg-light border d-flex flex-row justify-content-between align-items-center">
+            <span class="text-muted small">Tessallite Issue Hub v1.0</span>
+            <a href="/help/apis" class="btn btn-dark btn-sm font-monospace">Next Page: /help/apis <i class="fa-solid fa-arrow-right ms-1"></i></a>
+        </div>
+    </div>
+</div>
+{% endblock %}

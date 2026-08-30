@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}Configuration - Tessallite Issue Hub{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <!-- Left Column: Vocabularies lists -->
+    <div class="col-lg-8">
+        <div class="card shadow-sm bg-white mb-4">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0 fw-bold text-dark"><i class="fa-solid fa-list-check me-2"></i>Lookup Vocabularies</h5>
+            </div>
+            <div class="card-body p-4">
+                <p class="text-muted small">The following advisory vocabularies populate dropdown selections on forms and are referenced by search/validation routines.</p>
+                
+                <div class="accordion" id="lookupAccordion">
+                    {% for type_name, list in lookups.items() %}
+                    <div class="accordion-item border-light">
+                        <h2 class="accordion-header" id="heading-{{ type_name }}">
+                            <button class="accordion-button collapsed fw-bold py-3 text-secondary uppercase small" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ type_name }}">
+                                <i class="fa-solid fa-hashtag me-2 text-muted"></i> {{ type_name }} ({{ list|length }} values)
+                            </button>
+                        </h2>
+                        <div id="collapse-{{ type_name }}" class="accordion-collapse collapse" data-bs-parent="#lookupAccordion">
+                            <div class="accordion-body bg-light p-3">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover bg-white border rounded">
+                                        <thead class="table-light small">
+                                            <tr>
+                                                <th class="ps-3">Value</th>
+                                                <th>Label</th>
+                                                <th>Display Order</th>
+                                                <th>Active</th>
+                                                {% if type_name == "STATUS" %}
+                                                <th class="pe-3">Terminal State</th>
+                                                {% endif %}
+                                            </tr>
+                                        </thead>
+                                        <tbody class="small font-monospace">
+                                            {% for l in list %}
+                                            <tr>
+                                                <td class="ps-3 fw-bold">{{ l.value }}</td>
+                                                <td>{{ l.label or l.value }}</td>
+                                                <td>{{ l.display_order }}</td>
+                                                <td>
+                                                    {% if l.is_active %}
+                                                    <span class="text-success"><i class="fa-solid fa-circle-check"></i> Yes</span>
+                                                    {% else %}
+                                                    <span class="text-danger"><i class="fa-solid fa-circle-xmark"></i> No</span>
+                                                    {% endif %}
+                                                </td>
+                                                {% if type_name == "STATUS" %}
+                                                <td class="pe-3">
+                                                    {% if l.is_terminal %}
+                                                    <span class="badge bg-success small">CLOSED</span>
+                                                    {% else %}
+                                                    <span class="badge bg-warning text-dark small">OPEN</span>
+                                                    {% endif %}
+                                                </td>
+                                                {% endif %}
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: Settings Overwrites (e.g. templates) -->
+    <div class="col-lg-4">
+        <div class="card p-4 bg-white mb-4 shadow-sm">
+            <h5 class="fw-bold text-dark mb-3"><i class="fa-solid fa-key me-2 text-secondary"></i>Identity Key Template</h5>
+            <p class="text-muted small">Define the global template format used to render issue IDs. Must contain `{number}` as the final segment.</p>
+            <form action="/settings/template" method="post">
+                <div class="mb-3">
+                    <label for="key_template" class="form-label small fw-bold">Template Format</label>
+                    <input type="text" class="form-control form-control-sm font-monospace" id="key_template" name="key_template" value="{{ settings.get('issue_key_template', {}).get('template', 'Bug-{number}') }}" required>
+                    <div class="form-text small text-muted">Examples: `Bug-{number}`, `{project}-Bug-{number}`.</div>
+                </div>
+                <button type="submit" class="btn btn-dark btn-sm w-100 py-2 fw-bold text-uppercase"><i class="fa-solid fa-save me-1"></i> Update Template</button>
+            </form>
+        </div>
+
+        <div class="card p-4 bg-white mb-4 shadow-sm bg-light">
+            <h5 class="fw-bold text-dark mb-2"><i class="fa-solid fa-circle-info me-2 text-secondary"></i>Hub Settings Info</h5>
+            <div class="small text-muted">
+                <div class="mb-2"><strong>Default Project:</strong> <code>{{ settings.get('default_project', {}).get('value', 'tessallite') }}</code></div>
+                <div class="mb-2"><strong>Default Repository:</strong> <code>{{ settings.get('default_repository', {}).get('value', 'tessallite-workspace') }}</code></div>
+                <div class="mb-2"><strong>Default Branch:</strong> <code>{{ settings.get('default_branch', {}).get('value', 'main') }}</code></div>
+                <div class="mb-2"><strong>Title Safe Limit:</strong> <code>{{ settings.get('title_max_length', {}).get('value', 500) }} characters</code></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
