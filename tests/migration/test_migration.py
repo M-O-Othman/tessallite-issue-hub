@@ -98,7 +98,7 @@ Desc 4."""
         assert success is True
         assert not errors
         assert report["valid_count"] == 4
-        assert report["calculated_baseline"] == 9631 # max(9627, 9628, 9610, 9630) + 1
+        assert report["calculated_baseline"] == 9630 # max(9627, 9628, 9610) + 1 -> baseline 9629 -> intake assigned 9629 -> next baseline 9630 (Gate 4 / Section 5)
         
         # Verify database records
         bug_9627 = db.query(Issue).filter(Issue.issue_id == "Bug-9627").first()
@@ -109,10 +109,16 @@ Desc 4."""
         bug_9610 = db.query(Issue).filter(Issue.issue_id == "Bug-9610").first()
         assert bug_9610 is not None
         assert bug_9610.status == "CLOSED"
+
+        # Verify that intake TMP-9630 received a brand new canonical sequence number and Bug-9629 ID
+        bug_9629 = db.query(Issue).filter(Issue.issue_id == "Bug-9629").first()
+        assert bug_9629 is not None
+        assert bug_9629.status == "OPEN"
+        assert bug_9629.aka == "TMP-9630"
         
-        # Test sequence allocation baselining: creating a new issue should assign next_val = 9631
+        # Test sequence allocation baselining: creating a new issue should assign next_val = 9630
         new_val = db.execute(text("SELECT nextval('issue_number_seq')")).scalar()
-        assert new_val == 9631
+        assert new_val == 9630
         
     finally:
         db.close()

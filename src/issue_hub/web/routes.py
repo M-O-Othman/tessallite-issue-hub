@@ -344,19 +344,19 @@ def post_create_issue(
 
 
 @router.get("/issues/{issue_id}", response_class=HTMLResponse)
-def get_issue_detail(request: Request, issue_id: str, db: Session = Depends(get_db)):
+def get_issue_detail(request: Request, issue_id: str, error: Optional[str] = None, db: Session = Depends(get_db)):
     if not is_authenticated(request):
         return redirect_to_login()
-        
+
     issue = db.query(Issue).filter(func.lower(Issue.issue_id) == func.lower(issue_id)).first()
     if not issue:
         raise HTTPException(status_code=404, detail=f"Issue {issue_id} not found")
-        
+
     # Fetch history timeline
     history_records = db.query(IssueHistory).filter(
-        IssueHistory.issue_id == issue_id
+        func.lower(IssueHistory.issue_id) == func.lower(issue_id)
     ).order_by(IssueHistory.history_id.desc()).all()
-    
+
     # Load editable vocabularies
     projects = db.query(LookupValue).filter(LookupValue.lookup_type == "PROJECT", LookupValue.is_active.is_(True)).all()
     repositories = db.query(LookupValue).filter(LookupValue.lookup_type == "REPOSITORY", LookupValue.is_active.is_(True)).all()
@@ -383,8 +383,13 @@ def get_issue_detail(request: Request, issue_id: str, db: Session = Depends(get_
             "domains": domains,
             "categories": categories,
             "retire_reasons": retire_reasons,
+            "error": error
         }
     )
+
+def render_detail_with_error(request: Request, issue_id: str, db: Session, error: str) -> HTMLResponse:
+    """Helper to render issue detail page with error message (Gate 2 / Section 10)."""
+    return get_issue_detail(request=request, issue_id=issue_id, error=error, db=db)
 
 @router.post("/issues/{issue_id}/edit", response_class=HTMLResponse)
 def post_edit_issue(
@@ -399,7 +404,6 @@ def post_edit_issue(
     priority: Optional[str] = Form(None),
     expected_effort: str = Form("UNKNOWN"),
     title: str = Form(...),
-    description: str = Form(...),
     area: Optional[str] = Form(None),
     classification: Optional[str] = Form(None),
     domain: Optional[str] = Form(None),
@@ -434,7 +438,6 @@ def post_edit_issue(
                 priority=priority or None,
                 expected_effort=expected_effort,
                 title=title,
-                description=description,
                 area=area or None,
                 classification=classification or None,
                 domain=domain or None,
@@ -449,6 +452,7 @@ def post_edit_issue(
         update_issue(db, issue_id, patch)
     except Exception as e:
         logger.error(f"Web edit failed: {e}")
+        return render_detail_with_error(request, issue_id, db, str(e))
         
     return RedirectResponse(url=f"/issues/{issue_id}", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -472,6 +476,7 @@ def post_append_description(
         update_issue(db, issue_id, patch)
     except Exception as e:
         logger.error(f"Web append failed: {e}")
+        return render_detail_with_error(request, issue_id, db, str(e))
         
     return RedirectResponse(url=f"/issues/{issue_id}", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -503,6 +508,7 @@ def post_retire_issue(
         update_issue(db, issue_id, patch)
     except Exception as e:
         logger.error(f"Web retire failed: {e}")
+        return render_detail_with_error(request, issue_id, db, str(e))
         
     return RedirectResponse(url=f"/issues/{issue_id}", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -531,24 +537,7 @@ def get_settings_page(request: Request, error: Optional[str] = None, db: Session
         }
     )
 
-import re
-
-def validate_key_template(template: str):
-    """Validate issue key template format (Gate 3)."""
-    # 1. Must contain exactly one '{number}' placeholder
-    if template.count("{number}") != 1:
-        raise ValueError("Template must contain exactly one '{number}' placeholder.")
-    
-    # 2. Check for other placeholders to ensure only supported ones are used
-    placeholders = re.findall(r"\{([^}]+)\}", template)
-    supported = {"number", "project", "repository", "branch"}
-    for p in placeholders:
-        if p not in supported:
-            raise ValueError(f"Unsupported placeholder '{{{p}}}'. Supported placeholders are: {{number}}, {{project}}, {{repository}}, {{branch}}.")
-            
-    # 3. Verify rendered template length is safe
-    if len(template) > 100:
-        raise ValueError("Template format is too long (maximum 100 characters).")
+from issue_hub.key_generation import validate_key_template
 
 @router.post("/settings/template", response_class=HTMLResponse)
 def post_update_template(

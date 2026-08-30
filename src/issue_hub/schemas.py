@@ -3,9 +3,9 @@ from typing import List, Optional, Dict, Any
 
 class CreateIssueRequest(BaseModel):
     model_config = {"extra": "forbid"}
-    project: str = "tessallite"
+    project: Optional[str] = None
     repository: Optional[str] = None
-    branch: str = "main"
+    branch: Optional[str] = None
     worktree: Optional[str] = None
     task: Optional[str] = None
 
@@ -68,6 +68,8 @@ class UpdateIssueRequestSet(BaseModel):
     owner: Optional[str] = None
     recommended_next_step: Optional[str] = None
     tags: Optional[List[str]] = None
+    add_tags: Optional[List[str]] = None
+    remove_tags: Optional[List[str]] = None
     duplicate_of: Optional[str] = None
     related_to: Optional[str] = None
 

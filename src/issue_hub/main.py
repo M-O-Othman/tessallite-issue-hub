@@ -16,7 +16,19 @@ from issue_hub.web import routes as web_routes
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifespan event handler to perform idempotent startup seeding."""
+    """Lifespan event handler to perform idempotent startup seeding and fail-closed security checks (Gate 2)."""
+    # Enforce strict security validation outside of development mode (Gate 2 / Section 4)
+    if settings.env != "development":
+        if not settings.api_token or settings.api_token == "api_bearer_token_123":
+            logger.critical("SECURITY FAILURE: ISSUE_HUB_API_TOKEN is missing, empty, or set to the default value in production.")
+            raise ValueError("SECURITY FAILURE: ISSUE_HUB_API_TOKEN is missing, empty, or set to the default value in production.")
+        if not settings.session_secret or settings.session_secret == "super_secret_session_key_9999":
+            logger.critical("SECURITY FAILURE: ISSUE_HUB_SESSION_SECRET is missing or set to the default value in production.")
+            raise ValueError("SECURITY FAILURE: ISSUE_HUB_SESSION_SECRET is missing or set to the default value in production.")
+        if not settings.web_password_hash or settings.web_password_hash == "$2b$12$aFi5o69Jva.w9qOPi952mOsdCA3kSt7QprLhhicsNJTBrQSdEaa8O":
+            logger.critical("SECURITY FAILURE: ISSUE_HUB_WEB_PASSWORD_HASH is missing or set to the default hash in production.")
+            raise ValueError("SECURITY FAILURE: ISSUE_HUB_WEB_PASSWORD_HASH is missing or set to the default hash in production.")
+
     db = SessionLocal()
     try:
         seed_lookups(db)
@@ -112,6 +124,7 @@ def database_interface_error_handler(request, exc: InterfaceError):
 # Custom validation exception handler (Gate 3 / Section 9)
 @app.exception_handler(RequestValidationError)
 def validation_exception_handler(request, exc: RequestValidationError):
+    from fastapi.encoders import jsonable_encoder
     errors_list = []
     for err in exc.errors():
         loc_str = " -> ".join(str(l) for l in err.get("loc", []))
@@ -124,7 +137,7 @@ def validation_exception_handler(request, exc: RequestValidationError):
             "error": {
                 "code": "VALIDATION_FAILED",
                 "message": "; ".join(errors_list),
-                "details": {"errors": exc.errors()}
+                "details": {"errors": jsonable_encoder(exc.errors())}
             }
         }
     )

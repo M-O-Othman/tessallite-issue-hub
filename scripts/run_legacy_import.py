@@ -22,13 +22,26 @@ def main():
         with open("migration_sources/closed-registry.md", "r", encoding="utf-8") as f:
             closed_content = f.read()
             
+        # Read intake files dynamically if present (Gate 4 / Section 5)
+        intake_dict = {}
+        import os
+        intake_dir = "migration_sources/intakes"
+        if os.path.isdir(intake_dir):
+            print("Reading pending intake files from migration_sources/intakes/...")
+            for fn in os.listdir(intake_dir):
+                if fn.endswith(".md"):
+                    file_path = os.path.join(intake_dir, fn)
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        file_id = os.path.splitext(fn)[0]
+                        intake_dict[file_id] = f.read()
+
         # 4. Execute the actual migration
         print("Executing migration import transaction (parsing, validating, and inserting 3550+ records)...")
         success, errors, report = run_migration_import(
             db=db,
             active_registry_content=active_content,
             closed_registry_content=closed_content,
-            intake_files=None
+            intake_files=intake_dict if intake_dict else None
         )
         
         if not success:

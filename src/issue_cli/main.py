@@ -143,14 +143,14 @@ def handle_create(args, config: Dict[str, Any]) -> Dict[str, Any]:
             "category": args.category,
         }
         
-    # Merge resolved config (project, repository, branch, worktree)
-    # git discovery context is merged as a fallback
+    # Merge resolved config (project, repository, branch, worktree) - Gate 6 / Section 11
+    # Precedence: explicit CLI -> env/user config -> Git discovery -> server default
     git_ctx = discover_git_context()
     
-    payload["project"] = payload.get("project") or config["project"] or "tessallite"
-    payload["repository"] = payload.get("repository") or config["repository"] or git_ctx.get("repository")
-    payload["branch"] = payload.get("branch") or config["branch"] or git_ctx.get("branch") or "main"
-    payload["worktree"] = payload.get("worktree") or config["worktree"] or git_ctx.get("worktree")
+    payload["project"] = payload.get("project") or config["project"] or None
+    payload["repository"] = payload.get("repository") or config["repository"] or git_ctx.get("repository") or None
+    payload["branch"] = payload.get("branch") or config["branch"] or git_ctx.get("branch") or None
+    payload["worktree"] = payload.get("worktree") or config["worktree"] or None # Do not auto-send worktree (Section 11)
     
     # Filter out None values
     payload = {k: v for k, v in payload.items() if v is not None}
@@ -258,28 +258,11 @@ def handle_update(args, config: Dict[str, Any]) -> Dict[str, Any]:
                     }
                 })
                 
-        # Parse tags (Section 34.4: --add-tag and --remove-tag)
-        if getattr(args, "add_tag", None) or getattr(args, "remove_tag", None):
-            existing_tags = []
-            try:
-                current_res = send_request(config["url"], "GET", "/api/v1/issues", config["token"], params={"id": args.id})
-                if current_res.get("items"):
-                    existing_tags = list(current_res["items"][0].get("tags", []))
-            except Exception:
-                existing_tags = []
-
-            # Add tags
-            if getattr(args, "add_tag", None):
-                for t in args.add_tag:
-                    if t not in existing_tags:
-                        existing_tags.append(t)
-                        
-            # Remove tags
-            if getattr(args, "remove_tag", None):
-                remove_set = set(args.remove_tag)
-                existing_tags = [t for t in existing_tags if t not in remove_set]
-
-            set_fields["tags"] = existing_tags
+        # Parse tags as atomic additions/removals (Gate 6 / Section 11)
+        if getattr(args, "add_tag", None):
+            set_fields["add_tags"] = list(args.add_tag)
+        if getattr(args, "remove_tag", None):
+            set_fields["remove_tags"] = list(args.remove_tag)
 
         payload = {
             "set": set_fields if set_fields else None,

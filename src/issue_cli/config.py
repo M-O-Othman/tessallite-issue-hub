@@ -74,7 +74,7 @@ def resolve_config(cli_args: Any) -> Dict[str, Any]:
         getattr(cli_args, "branch", None)
         or os.environ.get("ISSUE_HUB_BRANCH")
         or user_conf.get("ISSUE_HUB_BRANCH")
-        or "main"
+        or ""
     )
     # Worktree
     resolved["worktree"] = (

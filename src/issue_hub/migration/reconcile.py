@@ -32,10 +32,11 @@ def reconcile_and_validate(
             
         imported_ids.add(rec_id)
         
-        # Track max sequence number
-        seq_num = rec.get("sequence_number", 0)
-        if seq_num > max_imported_seq:
-            max_imported_seq = seq_num
+        # Track max sequence number (Only for canonical registry rows, skip pending TMP-* intakes - Gate 4 / Section 5)
+        if not rec_id.startswith("TMP-") and "TMP" not in rec_id and len(rec_id) <= 10:
+            seq_num = rec.get("sequence_number", 0)
+            if seq_num > max_imported_seq:
+                max_imported_seq = seq_num
             
         # 2. Validation: Ensure title is not empty
         if not rec.get("title"):

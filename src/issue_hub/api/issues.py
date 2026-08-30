@@ -71,7 +71,7 @@ def api_list_issues(
     updated_from: Optional[datetime] = Query(None),
     updated_to: Optional[datetime] = Query(None),
     include_history: Optional[bool] = Query(None),
-    limit: int = Query(100, ge=1, le=1000),
+    limit: Optional[int] = Query(None, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     sort: Optional[str] = Query(None),
     db: Session = Depends(get_db),
@@ -144,6 +144,10 @@ def api_list_issues(
         sort=sort,
     )
     
+    from issue_hub.issue_service import get_hub_setting
+    db_limit = get_hub_setting(db, "search_default_limit", 100)
+    resolved_limit = limit if limit is not None else db_limit
+
     # Process inline history if requested (Gate 3 / Section 9)
     res_items = []
     for item in items:
@@ -157,7 +161,7 @@ def api_list_issues(
         "ok": True,
         "items": res_items,
         "total": total,
-        "limit": limit,
+        "limit": resolved_limit,
         "offset": offset,
     }
 

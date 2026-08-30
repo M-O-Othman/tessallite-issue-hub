@@ -76,3 +76,39 @@ def render_issue_id(
         raise ValueError(f"Rendered issue ID must end with sequence number suffix '-{number}'")
         
     return rendered
+
+def validate_key_template(template: str):
+    """Validate issue key template format centrally (Gate 3 / Section 8)."""
+    # 1. Must contain exactly one '{number}' placeholder
+    if template.count("{number}") != 1:
+        raise ValueError("Template must contain exactly one '{number}' placeholder.")
+        
+    # 2. Must end with '{number}'
+    if not template.endswith("{number}"):
+        raise ValueError("Template must end with the '{number}' placeholder.")
+    
+    # 3. Check for other placeholders to ensure only supported ones are used
+    placeholders = re.findall(r"\{([^}]+)\}", template)
+    supported = {"number", "project", "repository", "branch", "task", "type"}
+    for p in placeholders:
+        if p not in supported:
+            raise ValueError(f"Unsupported placeholder '{{{p}}}'. Supported placeholders are: {{number}}, {{project}}, {{repository}}, {{branch}}, {{task}}, {{type}}.")
+            
+    # 4. Verify rendered template length is safe
+    if len(template) > 100:
+        raise ValueError("Template format is too long (maximum 100 characters).")
+        
+    # 5. Run a sample render to verify correctness (Gate 3 / Section 8)
+    try:
+        from issue_hub.key_generation import render_issue_id
+        render_issue_id(
+            template=template,
+            number=9999,
+            project="testproj",
+            repository="testrepo",
+            branch="testbranch",
+            task="testtask",
+            type_="testtype"
+        )
+    except Exception as e:
+        raise ValueError(f"Invalid key template: sample render failed with error: {e}")

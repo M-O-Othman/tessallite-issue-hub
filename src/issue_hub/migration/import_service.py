@@ -17,13 +17,13 @@ def run_migration_import(
     """Execute complete legcy-to-hub migration, baselining the sequence (Section 23)."""
     parsed_records = []
     
-    # 1. Parse Active Registry (slice to first 50 sample issues)
+    # 1. Parse Active Registry
     if active_registry_content:
-        parsed_records.extend(parse_registry_file(active_registry_content)[:50])
+        parsed_records.extend(parse_registry_file(active_registry_content))
         
-    # 2. Parse Closed Registry (slice to first 50 sample issues)
+    # 2. Parse Closed Registry
     if closed_registry_content:
-        closed_recs = parse_registry_file(closed_registry_content)[:50]
+        closed_recs = parse_registry_file(closed_registry_content)
         # Preserve original statuses (e.g. FIXED, RESOLVED, BY-DESIGN) rather than flattening to CLOSED (Gate 4 / Section 5)
         parsed_records.extend(closed_recs)
         
@@ -40,7 +40,23 @@ def run_migration_import(
     if errors:
         return False, errors, report
         
-    # 5. Insert records inside a transaction using high-performance bulk mappings (Section 23)
+    # 5. Allocate new canonical IDs for pending intakes (Gate 4 / Section 5)
+    from issue_hub.issue_service import get_project_key_template
+    from issue_hub.key_generation import render_issue_id
+    next_id_num = report["calculated_baseline"]
+    for rec in parsed_records:
+        rid = rec["issue_id"]
+        if rid.startswith("TMP-") or "TMP" in rid or len(rid) > 10:
+            rec["sequence_number"] = next_id_num
+            # Load project key template dynamically
+            template = get_project_key_template(db, rec["project"])
+            rec["issue_id"] = render_issue_id(template, next_id_num, project=rec["project"])
+            rec["aka"] = rid # Move original TMP ID into AKA (Section 5)
+            next_id_num += 1
+            
+    report["calculated_baseline"] = next_id_num
+
+    # 6. Insert records inside a transaction using high-performance bulk mappings (Section 23)
     try:
         from issue_hub.models import Issue, IssueHistory
         

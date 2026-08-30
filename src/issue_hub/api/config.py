@@ -97,6 +97,36 @@ def api_update_settings(
     token: str = Depends(verify_api_token)
 ):
     """Update a specific setting."""
+    if request.setting_key == "issue_key_template":
+        template = request.setting_value.get("template")
+        if not template:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "ok": False,
+                    "error": {
+                        "code": "INVALID_TEMPLATE",
+                        "message": "Template value is missing.",
+                        "details": {}
+                    }
+                }
+            )
+        try:
+            from issue_hub.key_generation import validate_key_template
+            validate_key_template(template)
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "ok": False,
+                    "error": {
+                        "code": "INVALID_TEMPLATE",
+                        "message": str(e),
+                        "details": {}
+                    }
+                }
+            )
+
     setting = db.query(HubSetting).filter(HubSetting.setting_key == request.setting_key).first()
     if not setting:
         setting = HubSetting(setting_key=request.setting_key, setting_value=request.setting_value)

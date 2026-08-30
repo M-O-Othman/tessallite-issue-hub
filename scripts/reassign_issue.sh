@@ -63,10 +63,11 @@ if [ ! -e "$TARGET_PATH" ]; then
     exit 1
 fi
 
-# Git-clean check (Gate 6)
+# Git-clean check including untracked files (Gate 6 / Section 11)
 if [ "$FORCE" = false ] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    if ! git diff-index --quiet HEAD --; then
-        echo "Error: Your Git working tree is dirty. Please commit or stash your changes before reassigning IDs,"
+    if [ -n "$(git status --porcelain)" ]; then
+        echo "Error: Your Git working tree is dirty (has modified or untracked files)."
+        echo "Please commit, stash, or clean your changes before reassigning IDs,"
         echo "or run with '--force' to bypass this safety guard."
         exit 1
     fi
@@ -81,32 +82,39 @@ echo "  Scope:    $TARGET_PATH"
 echo "  Dry Run:  $DRY_RUN"
 echo "========================================================="
 
+# Export IDs to environment for secure Perl access (Gate 6 / Section 11)
+export OLD_ID
+export NEW_ID
+export DRY_RUN
+
 reassign_file() {
     local file="$1"
-    # Match exact word boundaries of the ID (case-insensitive) to prevent accidental partial matches
-    # Use Perl pattern quoting \Q...\E to safely escape all regex characters (Gate 6)
-    if perl -0777 -ne "exit 0 if /\b\Q$OLD_ID\E\b/i; exit 1" "$file"; then
+    
+    # 1. Verify file is a plain readable text file and NOT binary (Gate 6 / Section 11)
+    if [ ! -f "$file" ] || [ ! -r "$file" ] || ! perl -e 'exit 0 if -T $ARGV[0]; exit 1' "$file"; then
+        return 0
+    fi
+    
+    # 2. Match exact word boundaries of the ID (case-insensitive)
+    # Reference the environment variables strictly as literal values ($ENV{...}) with \Q...\E quoting
+    if perl -0777 -ne 'exit 0 if /\b\Q$ENV{OLD_ID}\E\b/i; exit 1' "$file"; then
         if [ "$DRY_RUN" = true ]; then
             echo "  [Dry-Run Match]: $file"
         else
             echo "  Rewriting: $file"
-            # Safe word-bounded replacement with regex-escaped inputs using \Q...\E
-            perl -pi -e "s/\b\Q$OLD_ID\E\b/$NEW_ID/gi" "$file"
+            # Secure replacement referencing %ENV to completely block shell/regex injection
+            perl -pi -e 's/\b\Q$ENV{OLD_ID}\E\b/$ENV{NEW_ID}/gi' "$file"
         fi
     fi
 }
 
 export -f reassign_file
-export OLD_ID
-export NEW_ID
-export DRY_RUN
 
 if [ -f "$TARGET_PATH" ]; then
     reassign_file "$TARGET_PATH"
 elif [ -d "$TARGET_PATH" ]; then
     # Target is a directory. Find and process all text files recursively.
     # We ignore binary/build folders (.git, __pycache__, .pytest_cache, pgdata)
-    # Corrected the -exec bash -c wiring to correctly pass the file as $1 (Gate 6)
     find "$TARGET_PATH" -type f \
         ! -path '*/.*' \
         ! -path '*/__pycache__/*' \

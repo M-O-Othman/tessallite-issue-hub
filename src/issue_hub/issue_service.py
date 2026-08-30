@@ -69,10 +69,15 @@ def get_project_key_template(db: Session, project: Optional[str]) -> str:
     return "Bug-{number}"
 
 
-def derive_title(description: Optional[str], default_title: str = "Reserved issue") -> str:
-    """Derive title from first non-empty description line, truncated to title_max_length."""
+def derive_title(description: Optional[str], db: Optional[Session] = None, default_title: str = "Reserved issue") -> str:
+    """Derive title from first non-empty description line, truncated to title_max_length (Gate 3 / Section 8)."""
     if not description:
         return default_title
+    
+    # Load dynamic limit if db context exists
+    max_len = settings.title_max_length
+    if db is not None:
+        max_len = get_hub_setting(db, "title_max_length", settings.title_max_length)
     
     # Find first non-empty line
     for line in description.splitlines():
@@ -81,7 +86,7 @@ def derive_title(description: Optional[str], default_title: str = "Reserved issu
             # Remove Markdown headings like '# ', '## ', etc.
             clean_line = re.sub(r"^#+\s+", "", trimmed)
             # Truncate
-            return clean_line[:settings.title_max_length]
+            return clean_line[:max_len]
             
     return default_title
 
@@ -173,7 +178,7 @@ def create_issue(db: Session, request: CreateIssueRequest, import_mode: bool = F
                 reserved.owner = request.owner
             if "recommended_next_step" in supplied:
                 reserved.recommended_next_step = request.recommended_next_step
-            if "tags" in supplied and request.tags:
+            if "tags" in supplied:
                 reserved.tags = clean_tags(request.tags)
                 
             # Perform schema validation on the final merged result (Gate 3 / Section 7)
@@ -229,8 +234,8 @@ def create_issue(db: Session, request: CreateIssueRequest, import_mode: bool = F
             task=request.task,
         )
 
-    # Derive title
-    derived_t = request.title or derive_title(request.description, default_title="Reserved issue" if request.reserve else "")
+    # Derive title (Gate 3 / Section 8)
+    derived_t = request.title or derive_title(request.description, db=db, default_title="Reserved issue" if request.reserve else "")
 
     status = request.status or ("RESERVED" if request.reserve else "OPEN")
     
@@ -291,6 +296,11 @@ def update_issue(db: Session, issue_id: str, request: UpdateIssueRequest) -> Iss
         for field, value in request.set.model_dump(exclude_unset=True).items():
             if field == "tags" and value is not None:
                 current.tags = clean_tags(value)
+            elif field == "add_tags" and value is not None:
+                current.tags = clean_tags(current.tags + value)
+            elif field == "remove_tags" and value is not None:
+                remove_set = {rt.lower() for rt in value}
+                current.tags = [t for t in current.tags if t.lower() not in remove_set]
             elif value is not None:
                 # Support explicit field-clearing contract (Gate 3 / Section 9)
                 if isinstance(value, str) and value.strip() in ("", "null", "NULL", "none", "NONE"):
@@ -317,9 +327,9 @@ def update_issue(db: Session, issue_id: str, request: UpdateIssueRequest) -> Iss
     current.updated_at = datetime.now(timezone.utc)
     db.add(current)
     
-    # Insert history
+    # Insert history (Gate 3 / Section 9)
     history = IssueHistory(
-        issue_id=issue_id,
+        issue_id=current.issue_id,
         operation=operation,
         before_record=before,
         after_record=current.to_dict(),

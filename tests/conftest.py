@@ -1,16 +1,26 @@
 import os
+from sqlalchemy.engine.url import make_url
 
-# 1. Safe Test Database Guard (Gate 5 / Section 12)
-db_url = os.getenv("DATABASE_URL", "")
-if "tessallite_system" in db_url or "34.82.232.232" in db_url or "sql.tessallite.io" in db_url:
-    raise ValueError(
-        f"CRITICAL SAFETY WARNING: pytest attempted to run against a production-like database: '{db_url}'. "
-        f"Execution aborted to prevent accidental data loss or truncation."
-    )
-
-# 2. Force development environment profile for all test suites (Gate 2)
+# 1. Force development and testing environment profiles (Gate 5 / Section 12)
 os.environ["ISSUE_HUB_ENV"] = "development"
-os.environ["DATABASE_URL"] = os.getenv(
+os.environ["ISSUE_HUB_TESTING"] = "1"
+
+# Load DATABASE_URL
+db_url = os.getenv(
     "DATABASE_URL", 
     "postgresql+psycopg://issue_hub:secret_password@localhost:5432/issue_hub"
 )
+os.environ["DATABASE_URL"] = db_url
+
+# 2. Positive Whitelist Safety Gate (Gate 5 / Section 12)
+try:
+    parsed = make_url(db_url)
+    db_name = parsed.database or ""
+    # Whitelist database names to ensure they must explicitly contain "test" or equal local dev "issue_hub"
+    if "test" not in db_name.lower() and db_name != "issue_hub":
+        raise ValueError(
+            f"CRITICAL SAFETY ABORT: pytest is whitelisted ONLY for database names containing 'test' "
+            f"or equaling local development 'issue_hub'. Attempted database: '{db_name}'."
+        )
+except Exception as e:
+    raise ValueError(f"CRITICAL SAFETY ABORT: Failed database safety validation: {e}")

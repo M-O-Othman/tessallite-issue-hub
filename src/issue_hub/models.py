@@ -95,6 +95,17 @@ class IssueHistory(Base):
     after_record = Column(JSONB)
     note = Column(String)
 
+    def to_dict(self) -> dict:
+        return {
+            "history_id": self.history_id,
+            "issue_id": self.issue_id,
+            "operation": self.operation,
+            "changed_at": self.changed_at.isoformat() if self.changed_at else None,
+            "before_record": self.before_record,
+            "after_record": self.after_record,
+            "note": self.note,
+        }
+
 class LookupValue(Base):
     __tablename__ = "lookup_values"
 

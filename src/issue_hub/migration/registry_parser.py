@@ -17,7 +17,12 @@ def parse_registry_line(line: str) -> Optional[Dict[str, Any]]:
         
     group = match.groupdict()
     issue_id = group["id"].strip()
-    status = group["status"].strip()
+    raw_status = group["status"].strip()
+    
+    # Extract leading status word (Gate 4 / Section 5)
+    status_parts = re.split(r"[\s—-]+", raw_status)
+    status = status_parts[0].upper() if status_parts else "OPEN"
+    
     aka = group["aka"].strip() if group["aka"] else None
     severity = group["severity"].strip()
     title = group["title"].strip()
