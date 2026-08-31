@@ -709,7 +709,8 @@ def get_visualization(request: Request, db: Session = Depends(get_db)):
     import json
     # Fetch all issues in the database
     all_issues = db.query(Issue).all()
-    issues_json = json.dumps([i.to_dict() for i in all_issues], default=str)
+    # Escape literal '</script>' tags to prevent premature script tag closure in HTML templates (Gate 2)
+    issues_json = json.dumps([i.to_dict() for i in all_issues], default=str).replace("</script>", "<\\/script>").replace("</Script>", "<\\/Script>")
     
     # Query terminal statuses for database-driven metrics calculations (Gate 3 / ANL-001)
     terminal_statuses = [
