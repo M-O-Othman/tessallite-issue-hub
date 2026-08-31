@@ -39,7 +39,7 @@ def test_successful_login_and_secure_pages():
     # Check session-restricted pages now work with the session cookies preserved by client
     response_create = client.get("/issues/create")
     assert response_create.status_code == 200
-    assert "Create or Reserve Issue" in response_create.text
+    assert "Register New Issue" in response_create.text
 
     response_settings = client.get("/settings")
     assert response_settings.status_code == 200

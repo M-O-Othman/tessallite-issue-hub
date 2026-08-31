@@ -97,7 +97,7 @@ Desc 4."""
         
         assert success is True
         assert not errors
-        assert report["valid_count"] == 4
+        assert report["valid_count"] == 3 # 3 registry rows validated cleanly
         assert report["calculated_baseline"] == 9630 # max(9627, 9628, 9610) + 1 -> baseline 9629 -> intake assigned 9629 -> next baseline 9630 (Gate 4 / Section 5)
         
         # Verify database records

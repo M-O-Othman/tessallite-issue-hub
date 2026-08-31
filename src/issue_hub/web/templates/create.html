@@ -4,15 +4,15 @@
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-10">
-        <div class="card shadow-sm bg-white mb-4">
-            <div class="card-header bg-white py-3">
-                <h5 class="mb-0 fw-bold text-dark"><i class="fa-solid fa-plus me-2"></i>Create or Reserve Issue</h5>
+    <div class="col-lg-10">
+        <div class="card shadow-sm bg-white border-0" style="border-radius:12px;">
+            <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 fw-bold text-dark"><i class="fa-solid fa-circle-plus me-2 text-success"></i>Register New Issue</h5>
+                <span class="small text-muted">Sequence ID Preview: <span class="badge bg-light text-success border fw-bold" id="id-preview">Bug-{{ next_seq }}</span></span>
             </div>
-            
             <div class="card-body p-4">
                 {% if error %}
-                <div class="alert alert-danger py-2 small" role="alert">
+                <div class="alert alert-danger py-2 small mb-4" role="alert">
                     <i class="fa-solid fa-circle-exclamation me-1"></i> {{ error }}
                 </div>
                 {% endif %}
@@ -20,57 +20,52 @@
                 <form action="/issues/create" method="post" id="create-form">
                     <input type="hidden" name="csrf_token" value="{{ get_csrf_token(request) }}">
                     <!-- Reservation Toggle (Section 19.4) -->
-                    <div class="card p-3 bg-light mb-4 border d-flex flex-row justify-content-between align-items-center">
-                        <div>
-                            <h6 class="fw-bold mb-1"><i class="fa-solid fa-ticket text-info me-1"></i> Reserve Issue ID Mode</h6>
-                            <p class="text-muted small mb-0">Pre-allocate a sequence number immediately. Severity and Description fields are optional in this mode.</p>
-                        </div>
-                        <div class="form-check form-switch fs-5">
-                            <input class="form-check-input" type="checkbox" role="switch" id="reserve" name="reserve" value="true" onchange="toggleReserveMode(this)">
+                    <div class="card p-3 bg-light border-light mb-4 shadow-sm" style="border-radius:10px;">
+                        <div class="form-check form-switch d-flex align-items-center justify-content-between">
+                            <div>
+                                <h6 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-ticket text-info me-1"></i> Reserve Issue ID Mode</h6>
+                                <p class="text-muted small mb-0">Pre-allocate a sequence number immediately. Severity and Description fields are optional in this mode.</p>
+                            </div>
+                            <input class="form-check-input" type="checkbox" id="reserve" name="reserve" value="true" onchange="toggleReserveMode(this)" {% if form_data and form_data.reserve %}checked{% endif %} style="width: 2.5em; height: 1.25em; cursor: pointer;">
                         </div>
                     </div>
 
-                    <!-- ID Preview Box (Section 19.4) -->
-                    <div class="alert alert-secondary py-2 small mb-4 font-monospace d-flex align-items-center">
-                        <i class="fa-solid fa-eye text-muted me-2"></i> ID Preview: <span class="fw-bold ms-1" id="id-preview">{{ global_template.replace('{number}', next_seq|string) }}</span>
-                    </div>
-
-                    <!-- Primary Context Fields -->
+                    <!-- Context Metadata -->
                     <div class="row g-3 mb-3">
                         <div class="col-md-3 col-sm-6">
-                            <label for="project" class="form-label small fw-bold">Project <span class="text-danger">*</span></label>
+                            <label for="project" class="form-label small fw-bold">Project Code</label>
                             <select class="form-select form-select-sm" id="project" name="project" onchange="updateIdPreview()" required>
                                 {% for p in projects %}
-                                <option value="{{ p.value }}">{{ p.label or p.value }}</option>
+                                <option value="{{ p.value }}" {% if (form_data and form_data.project == p.value) or (not form_data and p.value == "tessallite") %}selected{% endif %}>{{ p.label or p.value }}</option>
                                 {% endfor %}
                             </select>
                         </div>
                         <div class="col-md-3 col-sm-6">
-                            <label for="repository" class="form-label small fw-bold">Repository <span class="text-danger">*</span></label>
+                            <label for="repository" class="form-label small fw-bold">Repository</label>
                             <select class="form-select form-select-sm" id="repository" name="repository" required>
                                 {% for r in repositories %}
-                                <option value="{{ r.value }}">{{ r.label or r.value }}</option>
+                                <option value="{{ r.value }}" {% if (form_data and form_data.repository == r.value) %}selected{% endif %}>{{ r.label or r.value }}</option>
                                 {% endfor %}
                             </select>
                         </div>
                         <div class="col-md-3 col-sm-6">
                             <label for="branch" class="form-label small fw-bold">Branch</label>
-                            <input type="text" class="form-control form-control-sm" id="branch" name="branch" value="main">
+                            <input type="text" class="form-control form-control-sm" id="branch" name="branch" value="{{ form_data.branch if form_data else 'main' }}" required>
                         </div>
                         <div class="col-md-3 col-sm-6">
                             <label for="id" class="form-label small fw-bold text-muted">Complete Reservation (ID)</label>
-                            <input type="text" class="form-control form-control-sm font-monospace" id="id" name="id" placeholder="Bug-XXXX">
+                            <input type="text" class="form-control form-control-sm font-monospace" id="id" name="id" value="{{ form_data.id if form_data else '' }}" placeholder="Bug-XXXX">
                         </div>
                     </div>
 
                     <div class="row g-3 mb-4">
                         <div class="col-md-6">
                             <label for="worktree" class="form-label small fw-bold text-muted">Worktree Path</label>
-                            <input type="text" class="form-control form-control-sm" id="worktree" name="worktree" placeholder="/path/to/worktree">
+                            <input type="text" class="form-control form-control-sm" id="worktree" name="worktree" value="{{ form_data.worktree if form_data else '' }}" placeholder="/path/to/worktree">
                         </div>
                         <div class="col-md-6">
                             <label for="task" class="form-label small fw-bold text-muted">Task ID</label>
-                            <input type="text" class="form-control form-control-sm" id="task" name="task" placeholder="task-123">
+                            <input type="text" class="form-control form-control-sm" id="task" name="task" value="{{ form_data.task if form_data else '' }}" placeholder="task-123">
                         </div>
                     </div>
 
@@ -82,25 +77,25 @@
                             <label for="status_val" class="form-label small fw-bold">Status</label>
                             <select class="form-select form-select-sm" id="status_val" name="status_val">
                                 {% for s in statuses %}
-                                <option value="{{ s.value }}" {% if s.value == "OPEN" %}selected{% endif %}>{{ s.label or s.value }}</option>
+                                <option value="{{ s.value }}" {% if (form_data and form_data.status == s.value) or (not form_data and s.value == "OPEN") %}selected{% endif %}>{{ s.label or s.value }}</option>
                                 {% endfor %}
                             </select>
                         </div>
                         <div class="col-md-3 col-sm-6">
                             <label for="severity" class="form-label small fw-bold" id="severity-label">Severity <span class="text-danger">*</span></label>
                             <select class="form-select form-select-sm" id="severity" name="severity" required>
-                                <option value="" disabled selected>[Select Severity]</option>
+                                <option value="" disabled {% if not form_data or not form_data.severity %}selected{% endif %}>[Select Severity]</option>
                                 {% for s in severities %}
-                                <option value="{{ s.value }}">{{ s.label or s.value }}</option>
+                                <option value="{{ s.value }}" {% if form_data and form_data.severity == s.value %}selected{% endif %}>{{ s.label or s.value }}</option>
                                 {% endfor %}
                             </select>
                         </div>
                         <div class="col-md-3 col-sm-6">
                             <label for="priority" class="form-label small fw-bold text-muted">Priority</label>
                             <select class="form-select form-select-sm" id="priority" name="priority">
-                                <option value="">[None]</option>
+                                <option value="" {% if not form_data or not form_data.priority %}selected{% endif %}>[None]</option>
                                 {% for p in priorities %}
-                                <option value="{{ p.value }}">{{ p.label or p.value }}</option>
+                                <option value="{{ p.value }}" {% if form_data and form_data.priority == p.value %}selected{% endif %}>{{ p.label or p.value }}</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -108,7 +103,7 @@
                             <label for="expected_effort" class="form-label small fw-bold">Expected Effort</label>
                             <select class="form-select form-select-sm" id="expected_effort" name="expected_effort">
                                 {% for e in efforts %}
-                                <option value="{{ e.value }}" {% if e.value == "UNKNOWN" %}selected{% endif %}>{{ e.label or e.value }}</option>
+                                <option value="{{ e.value }}" {% if (form_data and form_data.expected_effort == e.value) or (not form_data and e.value == "UNKNOWN") %}selected{% endif %}>{{ e.label or e.value }}</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -117,12 +112,12 @@
                     <!-- Title & Description (Section 19.4) -->
                     <div class="mb-3">
                         <label for="title" class="form-label small fw-bold">Title</label>
-                        <input type="text" class="form-control" id="title" name="title" placeholder="Short descriptive summary (Optional if derived)">
+                        <input type="text" class="form-control" id="title" name="title" value="{{ form_data.title if form_data else '' }}" placeholder="Short descriptive summary (Optional if derived)">
                     </div>
 
                     <div class="mb-4">
                         <label for="description" class="form-label small fw-bold" id="description-label">Description <span class="text-danger">*</span></label>
-                        <textarea class="form-control font-monospace" id="description" name="description" rows="10" placeholder="Provide complete Markdown description..." required></textarea>
+                        <textarea class="form-control font-monospace" id="description" name="description" rows="10" placeholder="Provide complete Markdown description..." required>{{ form_data.description if form_data else '' }}</textarea>
                     </div>
 
                     <hr class="my-4">
@@ -131,27 +126,27 @@
                     <div class="row g-3 mb-3">
                         <div class="col-md-3 col-sm-6">
                             <label for="area" class="form-label small fw-bold text-muted">Area</label>
-                            <input type="text" class="form-control form-control-sm" id="area" name="area" placeholder="Gateway / Dax">
+                            <input type="text" class="form-control form-control-sm" id="area" name="area" value="{{ form_data.area if form_data else '' }}" placeholder="Gateway / Dax">
                         </div>
                         <div class="col-md-3 col-sm-6">
                             <label for="classification" class="form-label small fw-bold text-muted">Classification</label>
-                            <input type="text" class="form-control form-control-sm" id="classification" name="classification">
+                            <input type="text" class="form-control form-control-sm" id="classification" name="classification" value="{{ form_data.classification if form_data else '' }}">
                         </div>
                         <div class="col-md-3 col-sm-6">
                             <label for="domain" class="form-label small fw-bold text-muted">Domain</label>
                             <select class="form-select form-select-sm" id="domain" name="domain">
-                                <option value="">[None]</option>
+                                <option value="" {% if not form_data or not form_data.domain %}selected{% endif %}>[None]</option>
                                 {% for d in domains %}
-                                <option value="{{ d.value }}">{{ d.label or d.value }}</option>
+                                <option value="{{ d.value }}" {% if form_data and form_data.domain == d.value %}selected{% endif %}>{{ d.label or d.value }}</option>
                                 {% endfor %}
                             </select>
                         </div>
                         <div class="col-md-3 col-sm-6">
                             <label for="category" class="form-label small fw-bold text-muted">Category</label>
                             <select class="form-select form-select-sm" id="category" name="category">
-                                <option value="">[None]</option>
+                                <option value="" {% if not form_data or not form_data.category %}selected{% endif %}>[None]</option>
                                 {% for c in categories %}
-                                <option value="{{ c.value }}">{{ c.label or c.value }}</option>
+                                <option value="{{ c.value }}" {% if form_data and form_data.category == c.value %}selected{% endif %}>{{ c.label or c.value }}</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -160,21 +155,21 @@
                     <div class="row g-3 mb-4">
                         <div class="col-md-4">
                             <label for="refs" class="form-label small fw-bold text-muted">References (Files / Lines)</label>
-                            <input type="text" class="form-control form-control-sm" id="refs" name="refs" placeholder="src/main.py:123">
+                            <input type="text" class="form-control form-control-sm" id="refs" name="refs" value="{{ form_data.refs if form_data else '' }}" placeholder="src/main.py:123">
                         </div>
                         <div class="col-md-4">
                             <label for="source" class="form-label small fw-bold text-muted">Source</label>
-                            <input type="text" class="form-control form-control-sm" id="source" name="source" placeholder="Agent review">
+                            <input type="text" class="form-control form-control-sm" id="source" name="source" value="{{ form_data.source if form_data else '' }}" placeholder="Agent review">
                         </div>
                         <div class="col-md-4">
                             <label for="tags_raw" class="form-label small fw-bold text-muted">Tags (Comma-separated)</label>
-                            <input type="text" class="form-control form-control-sm" id="tags_raw" name="tags_raw" placeholder="excel, xmla, perf">
+                            <input type="text" class="form-control form-control-sm" id="tags_raw" name="tags_raw" value="{{ form_data.tags_raw if form_data else '' }}" placeholder="excel, xmla, perf">
                         </div>
                     </div>
 
                     <div class="mb-4">
                         <label for="recommended_next_step" class="form-label small fw-bold text-muted">Recommended Next Step / Remediation Plan</label>
-                        <textarea class="form-control font-monospace" id="recommended_next_step" name="recommended_next_step" rows="5" placeholder="Specify complete remediation plans or recommended next steps..."></textarea>
+                        <textarea class="form-control font-monospace" id="recommended_next_step" name="recommended_next_step" rows="5" placeholder="Specify complete remediation plans or recommended next steps...">{{ form_data.recommended_next_step if form_data else '' }}</textarea>
                     </div>
 
                     <div class="d-flex justify-content-end">

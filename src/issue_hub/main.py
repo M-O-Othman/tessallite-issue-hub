@@ -169,29 +169,57 @@ def http_exception_handler(request, exc: HTTPException):
         }
     )
 
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.types import ASGIApp, Scope, Receive, Send
+import json
 
-class LimitUploadSizeMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, max_upload_size: int = 10 * 1024 * 1024): # 10MB limit (Gate 2)
-        super().__init__(app)
+class LimitUploadSizeMiddleware:
+    def __init__(self, app: ASGIApp, max_upload_size: int = 10 * 1024 * 1024):
+        self.app = app
         self.max_upload_size = max_upload_size
 
-    async def dispatch(self, request, call_next):
-        content_length = request.headers.get('content-length')
-        if content_length:
-            if int(content_length) > self.max_upload_size:
-                return JSONResponse(
-                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                    content={
-                        "ok": False,
-                        "error": {
-                            "code": "PAYLOAD_TOO_LARGE",
-                            "message": f"Payload too large. Maximum body size limit is {self.max_upload_size} bytes.",
-                            "details": {}
-                        }
-                    }
-                )
-        return await call_next(request)
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http":
+            total_bytes = 0
+            
+            # Wrap ASGI receive stream to count bytes as they are read (Gate 2 / Section 4)
+            async def wrapped_receive():
+                nonlocal total_bytes
+                message = await receive()
+                if message["type"] == "http.request":
+                    body = message.get("body", b"")
+                    total_bytes += len(body)
+                    if total_bytes > self.max_upload_size:
+                        # Send 413 Payload Too Large and terminate
+                        await send({
+                            "type": "http.response.start",
+                            "status": status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                            "headers": [
+                                (b"content-type", b"application/json")
+                            ]
+                        })
+                        await send({
+                            "type": "http.response.body",
+                            "body": json.dumps({
+                                "ok": False,
+                                "error": {
+                                    "code": "PAYLOAD_TOO_LARGE",
+                                    "message": f"Payload too large. Maximum body size limit is {self.max_upload_size} bytes.",
+                                    "details": {}
+                                }
+                            }).encode("utf-8")
+                        })
+                        raise ValueError("Payload too large.")
+                return message
+                
+            try:
+                await self.app(scope, wrapped_receive, send)
+            except ValueError as e:
+                if str(e) == "Payload too large.":
+                    pass
+                else:
+                    raise e
+        else:
+            await self.app(scope, receive, send)
 
 app.add_middleware(LimitUploadSizeMiddleware, max_upload_size=10 * 1024 * 1024)
 

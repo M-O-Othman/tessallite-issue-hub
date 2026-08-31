@@ -107,6 +107,24 @@ def clean_tags(tags: List[str]) -> List[str]:
             cleaned.append(trimmed)
     return cleaned
 
+def validate_state_invariants(issue: Issue):
+    """Enforce strict RESERVED state-invariants centrally before any write (Gate 3 / Section 7)."""
+    if issue.status == "RESERVED":
+        # Incomplete fields permitted during RESERVED status
+        pass
+    else:
+        # Active status requires nonblank severity and description! (Section 7)
+        if not issue.description or not issue.description.strip():
+            raise IssueHubException(
+                "INVALID_STATUS_TRANSITION", 
+                f"Description is required to transition issue '{issue.issue_id}' to active status '{issue.status}'."
+            )
+        if not issue.severity or not issue.severity.strip():
+            raise IssueHubException(
+                "INVALID_STATUS_TRANSITION", 
+                f"Severity is required to transition issue '{issue.issue_id}' to active status '{issue.status}'."
+            )
+
 
 def create_issue(db: Session, request: CreateIssueRequest, import_mode: bool = False) -> Issue:
     """Core transaction logic for creating or reserving an issue (Section 34.1)."""
@@ -181,12 +199,8 @@ def create_issue(db: Session, request: CreateIssueRequest, import_mode: bool = F
             if "tags" in supplied:
                 reserved.tags = clean_tags(request.tags)
                 
-            # Perform schema validation on the final merged result (Gate 3 / Section 7)
-            if reserved.status != "RESERVED":
-                if not reserved.description or not reserved.description.strip():
-                    raise IssueHubException("INVALID_RESERVATION_COMPLETION", "Description is required to complete reservation.")
-                if not reserved.severity or not reserved.severity.strip():
-                    raise IssueHubException("INVALID_RESERVATION_COMPLETION", "Severity is required to complete reservation.")
+            # Perform centralized schema state-invariant validation (Gate 3 / Section 7)
+            validate_state_invariants(reserved)
                 
             reserved.updated_at = datetime.now(timezone.utc)
             db.add(reserved)
@@ -266,6 +280,10 @@ def create_issue(db: Session, request: CreateIssueRequest, import_mode: bool = F
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
     )
+    
+    # Enforce centralized state-invariants (Gate 3 / Section 7)
+    validate_state_invariants(issue)
+    
     db.add(issue)
     
     # Write history
@@ -325,6 +343,10 @@ def update_issue(db: Session, issue_id: str, request: UpdateIssueRequest) -> Iss
             current.duplicate_of = request.retire.duplicate_of
             
     current.updated_at = datetime.now(timezone.utc)
+    
+    # Enforce centralized state-invariants (Gate 3 / Section 7)
+    validate_state_invariants(current)
+    
     db.add(current)
     
     # Insert history (Gate 3 / Section 9)

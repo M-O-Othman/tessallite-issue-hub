@@ -28,12 +28,13 @@ def parse_intake_file(content: str, filename_id: str) -> Optional[Dict[str, Any]
                 metadata[k.strip().lower()] = v.strip()
     else:
         # Direct metadata lines (no --- delimiter - Gate 4 / Section 5)
+        # Included real workspace keys like 'temp_id', 'note', and 'resolution'
         VALID_KEYS = {
             "status", "severity", "area", "title", "refs", "project", "repository", 
             "branch", "worktree", "task", "priority", "expected_effort", "domain", 
             "category", "classification", "owner", "aka", "duplicate_of", "related_to", 
             "resolution", "source", "tags", "created_at", "updated_at", "reopen_count",
-            "calculated_effort", "recommended_next_step"
+            "calculated_effort", "recommended_next_step", "temp_id", "note", "aka_alias", "promoted_bug"
         }
         in_metadata = True
         for line in lines:
@@ -63,9 +64,31 @@ def parse_intake_file(content: str, filename_id: str) -> Optional[Dict[str, Any]
         desc_clean = re.sub(rf"^#+\s+{escaped_title}\s*\n*", "", desc_content, flags=re.IGNORECASE).strip()
     else:
         desc_clean = desc_content
+        
+    # Resolve canonical issue_id and temp_id (Gate 4 / Section 5)
+    # Check if a valid Bug-N or TMP-N is in the filename_id
+    bug_match = re.search(r"\b(Bug-\d+)\b", filename_id, re.IGNORECASE)
+    tmp_match = re.search(r"\b(TMP-\d+)\b", filename_id, re.IGNORECASE)
     
-    # Extract sequence number from ID if possible (e.g. TMP-1234 -> 1234)
-    seq_match = re.search(r"(\d+)$", filename_id)
+    canonical_id = None
+    temp_id = metadata.get("temp_id") or metadata.get("aka") or metadata.get("note")
+    
+    if bug_match:
+        canonical_id = bug_match.group(1)
+    elif tmp_match:
+        temp_id = tmp_match.group(1)
+        
+    if not canonical_id:
+        # It's a pending intake! We keep the full filename_id as the primary identity
+        issue_id = filename_id
+        is_pending = True
+    else:
+        # It's a promoted intake! It maps to an existing canonical ID
+        issue_id = canonical_id
+        is_pending = False
+    
+    # Extract sequence number from ID if possible
+    seq_match = re.search(r"(\d+)$", issue_id)
     seq_num = int(seq_match.group(1)) if seq_match else 0
     
     # Resolve project code
@@ -76,7 +99,9 @@ def parse_intake_file(content: str, filename_id: str) -> Optional[Dict[str, Any]
             project = id_parts[0]
             
     return {
-        "issue_id": filename_id,
+        "issue_id": issue_id,
+        "is_pending": is_pending,
+        "temp_id": temp_id,
         "sequence_number": seq_num,
         "project": project,
         "repository": metadata.get("repository"),

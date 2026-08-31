@@ -39,11 +39,14 @@ def query_issues(
     
     # Exact ID filter (case-insensitive & support combined aliases - Gate 3 / Section 9)
     if id_:
+        import re
         id_list = [i.strip() for i in id_.split(",") if i.strip()]
         filters = []
         for val in id_list:
             filters.append(func.lower(Issue.issue_id) == func.lower(val))
-            filters.append(Issue.aka.ilike(f"%{val}%"))
+            # Exact word-boundary matching on aka using PostgreSQL '\y' regex operator
+            escaped_val = re.escape(val)
+            filters.append(Issue.aka.op("~*")(rf"\y{escaped_val}\y"))
         query = query.filter(or_(*filters))
 
     # Exact field filters

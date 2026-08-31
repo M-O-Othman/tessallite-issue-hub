@@ -20,7 +20,8 @@ def parse_registry_line(line: str) -> Optional[Dict[str, Any]]:
     raw_status = group["status"].strip()
     
     # Extract leading status word (Gate 4 / Section 5)
-    status_parts = re.split(r"[\s—-]+", raw_status)
+    # Split only on whitespace or em-dashes (not hyphens) to preserve status names like FIXED-PENDING
+    status_parts = re.split(r"[\s—]+", raw_status)
     status = status_parts[0].upper() if status_parts else "OPEN"
     
     aka = group["aka"].strip() if group["aka"] else None

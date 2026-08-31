@@ -30,15 +30,62 @@ templates = Jinja2Templates(directory=str(templates_dir))
 import html
 import markdown
 import secrets
+from html.parser import HTMLParser
+
+class SafeHTMLSanitizer(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.result = []
+        self.safe_tags = {
+            "p", "br", "strong", "em", "code", "pre", "ul", "ol", "li", 
+            "a", "h1", "h2", "h3", "h4", "h5", "h6", "hr", "blockquote"
+        }
+
+    def handle_starttag(self, tag, attrs):
+        if tag.lower() in self.safe_tags:
+            # Reconstruct allowed tag with sanitized attributes
+            cleaned_attrs = []
+            for attr, val in attrs:
+                if tag.lower() == "a" and attr.lower() == "href":
+                    val_lower = val.lower().strip()
+                    # Block javascript:, data:, vbscript: protocols (stored XSS links - Gate 2 / Section 4)
+                    if (val_lower.startswith("http://") or 
+                        val_lower.startswith("https://") or 
+                        val_lower.startswith("mailto:") or 
+                        val_lower.startswith("/") or 
+                        val_lower.startswith(".") or 
+                        val_lower.startswith("#")):
+                        cleaned_attrs.append((attr, val))
+                elif attr.lower() == "title":
+                    cleaned_attrs.append((attr, val))
+            
+            attr_str = "".join(f' {a}="{html.escape(v)}"' for a, v in cleaned_attrs)
+            self.result.append(f"<{tag}{attr_str}>")
+
+    def handle_endtag(self, tag):
+        if tag.lower() in self.safe_tags:
+            self.result.append(f"</{tag}>")
+
+    def handle_data(self, data):
+        self.result.append(html.escape(data))
+
+    def get_html(self):
+        return "".join(self.result)
+
+def sanitize_html(html_str: str) -> str:
+    """Sanitize rendered HTML using a whitelist parser to prevent stored XSS (Gate 2 / Section 4)."""
+    sanitizer = SafeHTMLSanitizer()
+    sanitizer.feed(html_str)
+    return sanitizer.get_html()
 
 # Register Jinja2 filter for rendering Markdown
 def filter_markdown(text: str) -> str:
     if not text:
         return ""
-    # Safe escape of raw HTML tags to prevent XSS injection (Gate 2)
-    escaped_text = html.escape(text)
     # Render with standard markdown, converting newlines
-    return markdown.markdown(escaped_text, extensions=["nl2br"])
+    rendered = markdown.markdown(text, extensions=["nl2br"])
+    # Sanitize HTML after rendering to prevent script injections and unsafe URLs (Gate 2 / Section 4)
+    return sanitize_html(rendered)
 
 templates.env.filters["markdown"] = filter_markdown
 
@@ -332,11 +379,15 @@ def post_create_issue(
         return RedirectResponse(url=f"/issues/{issue.issue_id}", status_code=status.HTTP_303_SEE_OTHER)
     except Exception as e:
         logger.error(f"Web issue creation failed: {e}")
-        # Re-render form with error
+        # Re-render form with error and preserve inputs (Gate 2 / Section 10)
         projects = db.query(LookupValue).filter(LookupValue.lookup_type == "PROJECT", LookupValue.is_active.is_(True)).all()
         repositories = db.query(LookupValue).filter(LookupValue.lookup_type == "REPOSITORY", LookupValue.is_active.is_(True)).all()
         statuses = db.query(LookupValue).filter(LookupValue.lookup_type == "STATUS", LookupValue.is_active.is_(True)).all()
         severities = db.query(LookupValue).filter(LookupValue.lookup_type == "SEVERITY", LookupValue.is_active.is_(True)).all()
+        priorities = db.query(LookupValue).filter(LookupValue.lookup_type == "PRIORITY", LookupValue.is_active.is_(True)).all()
+        efforts = db.query(LookupValue).filter(LookupValue.lookup_type == "EFFORT", LookupValue.is_active.is_(True)).all()
+        domains = db.query(LookupValue).filter(LookupValue.lookup_type == "DOMAIN", LookupValue.is_active.is_(True)).all()
+        categories = db.query(LookupValue).filter(LookupValue.lookup_type == "CATEGORY", LookupValue.is_active.is_(True)).all()
         return templates.TemplateResponse(
             request,
             "create.html",
@@ -345,13 +396,36 @@ def post_create_issue(
                 "repositories": repositories,
                 "statuses": statuses,
                 "severities": severities,
-                "priorities": [],
-                "efforts": [],
-                "domains": [],
-                "categories": [],
+                "priorities": priorities,
+                "efforts": efforts,
+                "domains": domains,
+                "categories": categories,
                 "next_seq": 1,
                 "global_template": "Bug-{number}",
-                "error": str(e)
+                "error": str(e),
+                "form_data": {
+                    "project": project,
+                    "repository": repository,
+                    "branch": branch,
+                    "worktree": worktree or "",
+                    "task": task or "",
+                    "status": status_val,
+                    "severity": severity or "",
+                    "priority": priority or "",
+                    "expected_effort": expected_effort,
+                    "title": title or "",
+                    "description": description or "",
+                    "area": area or "",
+                    "classification": classification or "",
+                    "domain": domain or "",
+                    "category": category or "",
+                    "refs": refs or "",
+                    "source": source or "",
+                    "tags_raw": tags_raw or "",
+                    "recommended_next_step": recommended_next_step or "",
+                    "reserve": reserve,
+                    "id": id or ""
+                }
             }
         )
 
