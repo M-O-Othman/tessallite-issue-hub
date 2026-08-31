@@ -161,6 +161,15 @@
             <div id="progress-chart" class="chart-container"></div>
         </div>
 
+        <!-- Incoming Debt Trend: Daily Created vs Resolved Rate (New!) -->
+        <div class="analytics-card p-4 mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-arrows-spin me-2 text-warning"></i>Incoming Debt Trend (Created vs. Resolved Daily Rate)</h5>
+                <span class="badge bg-light text-dark border font-monospace">Daily Velocity</span>
+            </div>
+            <div id="debt-chart" class="chart-container" style="height: 350px;"></div>
+        </div>
+
         <!-- Interactive Multi-Dimensional Treemap (Gate 2) -->
         <div class="analytics-card p-4 mb-4">
             <div class="d-flex justify-content-between align-items-center mb-3">
@@ -179,6 +188,22 @@
             </div>
             <p class="text-muted small mb-3">Tiles represent metadata segments. **Area/Size** is proportional to the **Issue Count**, and nested tile **Colors** represent the **Severity** breakdown (Red: Critical, Orange: High, Yellow: Medium, Green: Low, Grey: Unverified).</p>
             <div id="treemap-chart" class="chart-container" style="height: 450px;"></div>
+        </div>
+
+        <!-- Side-by-Side: Aging WIP and Investment Allocation (New!) -->
+        <div class="row g-4 mb-4">
+            <div class="col-md-6">
+                <div class="analytics-card p-4">
+                    <h5 class="fw-bold mb-3 text-dark"><i class="fa-solid fa-hourglass-half me-2 text-danger"></i>Aging WIP & Flow Bottlenecks</h5>
+                    <div id="aging-wip-chart" class="chart-container" style="height: 350px;"></div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="analytics-card p-4">
+                    <h5 class="fw-bold mb-3 text-dark"><i class="fa-solid fa-chart-pie me-2 text-success"></i>Investment Allocation (Category Bandwidth)</h5>
+                    <div id="investment-chart" class="chart-container" style="height: 350px;"></div>
+                </div>
+            </div>
         </div>
 
         <!-- Multi-dimension Distribution Analysis -->
@@ -225,7 +250,10 @@
     
     // ECharts Instances
     let progressChartInstance = null;
+    let debtChartInstance = null;
     let treemapChartInstance = null;
+    let agingWipChartInstance = null;
+    let investmentChartInstance = null;
     let distChartInstance = null;
     let projVolumeChartInstance = null;
     
@@ -236,7 +264,10 @@
     document.addEventListener("DOMContentLoaded", function() {
         // Initialize ECharts instances
         progressChartInstance = echarts.init(document.getElementById("progress-chart"));
+        debtChartInstance = echarts.init(document.getElementById("debt-chart"));
         treemapChartInstance = echarts.init(document.getElementById("treemap-chart"));
+        agingWipChartInstance = echarts.init(document.getElementById("aging-wip-chart"));
+        investmentChartInstance = echarts.init(document.getElementById("investment-chart"));
         distChartInstance = echarts.init(document.getElementById("distribution-chart"));
         projVolumeChartInstance = echarts.init(document.getElementById("project-volume-chart"));
         
@@ -246,7 +277,10 @@
         // Handle responsive resizing
         window.addEventListener("resize", function() {
             progressChartInstance.resize();
+            if (debtChartInstance) debtChartInstance.resize();
             if (treemapChartInstance) treemapChartInstance.resize();
+            if (agingWipChartInstance) agingWipChartInstance.resize();
+            if (investmentChartInstance) investmentChartInstance.resize();
             distChartInstance.resize();
             projVolumeChartInstance.resize();
         });
@@ -361,6 +395,9 @@
         
         // 4. Render distributions and treemap
         updateTreemap(filtered);
+        renderDebtChart(filtered);
+        renderAgingWipChart(filtered);
+        renderInvestmentChart(filtered);
         updateDistributionChart(filtered);
         renderProjectVolumeChart(filtered);
     }
@@ -454,6 +491,175 @@
         };
 
         progressChartInstance.setOption(option, true);
+    }
+
+    function renderDebtChart(issues) {
+        const datesMap = {};
+        issues.forEach(i => {
+            const cDate = (i.created_at || "").slice(0, 10);
+            if (cDate) {
+                if (!datesMap[cDate]) datesMap[cDate] = { created: 0, resolved: 0 };
+                datesMap[cDate].created += 1;
+            }
+            if (terminalStatuses.includes((i.status || "").toUpperCase())) {
+                const rDate = (i.updated_at || "").slice(0, 10);
+                if (rDate) {
+                    if (!datesMap[rDate]) datesMap[rDate] = { created: 0, resolved: 0 };
+                    datesMap[rDate].resolved += 1;
+                }
+            }
+        });
+        const sortedDates = Object.keys(datesMap).sort();
+        const createdData = sortedDates.map(d => datesMap[d].created);
+        const resolvedData = sortedDates.map(d => datesMap[d].resolved);
+
+        const option = {
+            tooltip: {
+                trigger: 'axis'
+            },
+            legend: {
+                data: ['Created Daily', 'Resolved Daily'],
+                top: 10
+            },
+            xAxis: {
+                type: 'category',
+                data: sortedDates
+            },
+            yAxis: {
+                type: 'value',
+                minInterval: 1
+            },
+            series: [
+                {
+                    name: 'Created Daily',
+                    type: 'line',
+                    smooth: true,
+                    itemStyle: { color: '#D4AF37' },
+                    areaStyle: {
+                        color: 'rgba(212, 175, 55, 0.1)'
+                    },
+                    data: createdData
+                },
+                {
+                    name: 'Resolved Daily',
+                    type: 'line',
+                    smooth: true,
+                    itemStyle: { color: '#006C35' },
+                    areaStyle: {
+                        color: 'rgba(0, 108, 53, 0.1)'
+                    },
+                    data: resolvedData
+                }
+            ]
+        };
+        debtChartInstance.setOption(option, true);
+    }
+
+    function renderAgingWipChart(issues) {
+        const activeIssues = issues.filter(i => !terminalStatuses.includes((i.status || "").toUpperCase()) && !i.is_retired);
+        const projectsMap = {}; // proj -> [0-3, 4-7, 8-14, 15+]
+        const now = new Date();
+
+        activeIssues.forEach(i => {
+            const proj = i.project || "tessallite";
+            if (!projectsMap[proj]) {
+                projectsMap[proj] = [0, 0, 0, 0];
+            }
+            if (i.created_at) {
+                const cDate = new Date(i.created_at);
+                const ageDays = Math.floor((now - cDate) / (1000 * 60 * 60 * 24));
+                if (ageDays <= 3) projectsMap[proj][0] += 1;
+                else if (ageDays <= 7) projectsMap[proj][1] += 1;
+                else if (ageDays <= 14) projectsMap[proj][2] += 1;
+                else projectsMap[proj][3] += 1;
+            } else {
+                projectsMap[proj][0] += 1;
+            }
+        });
+
+        const projNames = Object.keys(projectsMap);
+        const data0_3 = projNames.map(p => projectsMap[p][0]);
+        const data4_7 = projNames.map(p => projectsMap[p][1]);
+        const data8_14 = projNames.map(p => projectsMap[p][2]);
+        const data15_plus = projNames.map(p => projectsMap[p][3]);
+
+        const option = {
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: { type: 'shadow' }
+            },
+            legend: {
+                data: ['0-3 Days', '4-7 Days', '8-14 Days', '15+ Days'],
+                top: 5
+            },
+            xAxis: {
+                type: 'value',
+                minInterval: 1
+            },
+            yAxis: {
+                type: 'category',
+                data: projNames
+            },
+            series: [
+                { name: '0-3 Days', type: 'bar', stack: 'total', itemStyle: { color: '#22c55e' }, data: data0_3 },
+                { name: '4-7 Days', type: 'bar', stack: 'total', itemStyle: { color: '#eab308' }, data: data4_7 },
+                { name: '8-14 Days', type: 'bar', stack: 'total', itemStyle: { color: '#f97316' }, data: data8_14 },
+                { name: '15+ Days', type: 'bar', stack: 'total', itemStyle: { color: '#ef4444' }, data: data15_plus }
+            ]
+        };
+        agingWipChartInstance.setOption(option, true);
+    }
+
+    function renderInvestmentChart(issues) {
+        const categoriesMap = {};
+        issues.forEach(i => {
+            const cat = i.category || "Uncategorized";
+            categoriesMap[cat] = (categoriesMap[cat] || 0) + 1;
+        });
+
+        const chartData = Object.keys(categoriesMap).map(k => ({
+            name: k,
+            value: categoriesMap[k]
+        }));
+
+        const option = {
+            tooltip: {
+                trigger: 'item',
+                formatter: '{a} <br/>{b}: {c} ({d}%)'
+            },
+            legend: {
+                orient: 'vertical',
+                left: 'left',
+                top: 20
+            },
+            series: [
+                {
+                    name: 'Bandwidth Ratio',
+                    type: 'pie',
+                    radius: ['40%', '70%'],
+                    avoidLabelOverlap: false,
+                    itemStyle: {
+                        borderRadius: 10,
+                        borderColor: '#fff',
+                        borderWidth: 2
+                    },
+                    color: ['#006C35', '#D4AF37', '#1E293B', '#475569', '#64748B', '#0284C7', '#0EA5E9'],
+                    label: {
+                        show: false,
+                        position: 'center'
+                    },
+                    emphasis: {
+                        label: {
+                            show: true,
+                            fontSize: 16,
+                            fontWeight: 'bold'
+                        }
+                    },
+                    data: chartData
+                }
+            ]
+        };
+        investmentChartInstance.setOption(option, true);
     }
 
     function updateTreemap(issuesList) {
