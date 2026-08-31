@@ -49,6 +49,13 @@ Modify fields on an existing issue:
 issue update Bug-1000 --set status=RESOLVED
 ```
 
+You can also update the full description (via direct text or a file) and add or remove tags:
+```bash
+issue update Bug-1000 --description "New issue description" --add-tag core --remove-tag temp
+# Or load the description from a file:
+issue update Bug-1000 --description-file path/to/description.md
+```
+
 Retire duplicates or invalid entries:
 ```bash
 issue update Bug-1000 --retire DUPLICATE --duplicate-of Bug-999 --retire-note "Duplicate of Bug-999"
@@ -60,8 +67,20 @@ issue update Bug-1000 --retire DUPLICATE --duplicate-of Bug-999 --retire-note "D
 
 The web portal is accessible at `http://localhost:8080/` (or your configured URL) and requires administrative login.
 
-### Dashboard and Search
-The homepage displays a summary card with running totals of issues (All, Open, Closed, Reserved, Retired), a text search input, and dimension filters (Project, Repository, Status, Severity, Tag, and Retirement state).
+### Site-Wide Global Project Selector
+The top navigation bar features a site-wide **Project Context Dropdown**. Selecting a project from this context automatically stores your preference in a local cookie, dynamically pre-filtering and customizing:
+- The running issue counter statistics on the Dashboard.
+- The default selected project on the "Create Issue" form.
+- The active results shown in the central Issue Ledger.
+- The statistical charts and visualizations on the Analytics page.
+
+You can toggle back to `[ALL PROJECTS]` at any time to clear the session cookie.
+
+### Collapsible Filter Control & Multi-Select Dimensions
+The homepage features a highly styled, collapsible **Advanced Filters Section** that organizes search parameters into cohesive logic grids:
+- **Multi-Select Dropdowns**: Projects, Repositories, Statuses, Severities, Priorities, Efforts, Domains, and Categories support selecting *multiple checkboxes simultaneously*. The backend processes these selections using high-performance SQL `IN` operators to display combined results. The dropdown triggers dynamically highlight selected items and summarize active criteria.
+- **Granular Text Filters**: Input precise sub-searches for Tag, Owner, Area/Module, Classification, Task ID, or Worktree Path.
+- **Chronological Boundaries**: Search for issues created within specific dates (`Created After` / `Created Before`) or retired/closed within specific dates (`Closed After` / `Closed Before`).
 
 ### Creating and Completing Issues
 Humans can create issues or reserve IDs using the interactive form. The form automatically normalizes parameters and previews the generated ID structure dynamically based on the project template.

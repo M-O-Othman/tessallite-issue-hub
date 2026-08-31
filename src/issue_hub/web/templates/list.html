@@ -75,77 +75,267 @@
 </div>
 
 <!-- Search and Filter Form (Section 19.3) -->
-<div class="card p-4 mb-4 bg-white shadow-sm">
+<div class="card p-4 mb-4 bg-white shadow-sm border-0">
     <form action="/" method="get" id="filter-form">
-        <div class="row g-3">
-            <!-- Left Side: Inputs & Dropdowns -->
-            <div class="col-lg-10">
-                <!-- Row 1: Text Search -->
-                <div class="mb-3">
-                    <label class="form-label small fw-bold text-uppercase text-secondary">Text Search</label>
-                    <div class="input-group">
-                        <span class="input-group-text bg-light text-muted"><i class="fa-solid fa-magnifying-glass"></i></span>
-                        <input type="text" class="form-control" name="q" value="{{ q }}" placeholder="Search ID, AKA, title, description, refs, owner, area...">
-                    </div>
-                </div>
-                
-                <!-- Row 2: Filters -->
-                <div class="row g-2">
-                    <div class="col-md-2 col-6">
-                        <label class="form-label small fw-bold text-muted text-uppercase">Project</label>
-                        <select class="form-select form-select-sm" name="project">
-                            <option value="">[All]</option>
-                            {% for p in projects %}
-                            <option value="{{ p[0] }}" {% if project_filter == p[0] %}selected{% endif %}>{{ p[1] or p[0] }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-2 col-6">
-                        <label class="form-label small fw-bold text-muted text-uppercase">Repository</label>
-                        <select class="form-select form-select-sm" name="repository">
-                            <option value="">[All]</option>
-                            {% for r in repositories %}
-                            <option value="{{ r[0] }}" {% if repository_filter == r[0] %}selected{% endif %}>{{ r[1] or r[0] }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-2 col-6">
-                        <label class="form-label small fw-bold text-muted text-uppercase">Status</label>
-                        <select class="form-select form-select-sm" name="status">
-                            <option value="">[All]</option>
-                            {% for s in statuses %}
-                            <option value="{{ s[0] }}" {% if status_filter == s[0] %}selected{% endif %}>{{ s[1] or s[0] }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-2 col-6">
-                        <label class="form-label small fw-bold text-muted text-uppercase">Severity</label>
-                        <select class="form-select form-select-sm" name="severity">
-                            <option value="">[All]</option>
-                            {% for s in severities %}
-                            <option value="{{ s[0] }}" {% if severity_filter == s[0] %}selected{% endif %}>{{ s[1] or s[0] }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-2 col-6">
-                        <label class="form-label small fw-bold text-muted text-uppercase">Tag</label>
-                        <input type="text" class="form-control form-control-sm" name="tag" value="{{ tag_filter }}" placeholder="Filter tag">
-                    </div>
-                    <div class="col-md-2 col-6">
-                        <label class="form-label small fw-bold text-muted text-uppercase">Retired</label>
-                        <select class="form-select form-select-sm" name="is_retired">
-                            <option value="">[All]</option>
-                            <option value="true" {% if is_retired_filter == True %}selected{% endif %}>Retired Only</option>
-                            <option value="false" {% if is_retired_filter == False %}selected{% endif %}>Active Only</option>
-                        </select>
-                    </div>
+        <input type="hidden" name="offset" id="form-offset-input" value="{{ offset }}">
+        
+        <!-- Primary Search Row -->
+        <div class="row g-3 align-items-end">
+            <div class="col-md-7">
+                <label class="form-label small fw-bold text-uppercase text-secondary mb-1">Text Search</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light text-muted" style="border-radius: 10px 0 0 10px;"><i class="fa-solid fa-magnifying-glass"></i></span>
+                    <input type="text" class="form-control" name="q" value="{{ q }}" placeholder="Search ID, AKA, title, description, refs, owner, area..." style="border-radius: 0 10px 10px 0;">
                 </div>
             </div>
-            
-            <!-- Right Side: Aligned Action Buttons -->
-            <div class="col-lg-2 d-flex flex-column justify-content-end gap-2" style="margin-bottom: 2px;">
-                <button type="submit" class="btn btn-dark w-100 py-2"><i class="fa-solid fa-filter me-1"></i> Apply</button>
-                <a href="/" class="btn btn-outline-secondary w-100 py-2"><i class="fa-solid fa-xmark me-1"></i> Clear</a>
+            <div class="col-md-5 d-flex gap-2">
+                <button type="submit" class="btn btn-dark flex-grow-1 py-2"><i class="fa-solid fa-filter me-1"></i> Apply Filters</button>
+                <a href="/" class="btn btn-outline-secondary py-2" style="border-radius: 10px; font-weight: 600;"><i class="fa-solid fa-xmark me-1"></i> Clear</a>
+                <button class="btn btn-outline-success py-2 px-3" type="button" data-bs-toggle="collapse" data-bs-target="#advancedFiltersCollapse" aria-expanded="false" aria-controls="advancedFiltersCollapse" style="border-radius: 10px; font-weight: 600;">
+                    <i class="fa-solid fa-sliders me-1"></i> Options <i class="fa-solid fa-chevron-down ms-1 small" id="advanced-chevron"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Collapsible Advanced Filters Section -->
+        <div class="collapse show" id="advancedFiltersCollapse">
+            <div class="border-top mt-3 pt-3">
+                <h6 class="fw-bold mb-3 text-secondary uppercase tracking-wider" style="font-size: 0.75rem;"><i class="fa-solid fa-layer-group me-1"></i> Advanced Filtering Dimensions</h6>
+                
+                <div class="row g-3">
+                    <!-- Column 1: Core Dimensions -->
+                    <div class="col-md-3">
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted text-uppercase mb-1">Projects</label>
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center bg-white" type="button" id="projectDropdownBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside" style="border-radius: 8px; border: 1px solid #8A94A6; padding: 10px 14px;">
+                                    <span class="text-truncate dropdown-label">[All]</span>
+                                </button>
+                                <div class="dropdown-menu p-3 w-100 shadow-lg" aria-labelledby="projectDropdownBtn" style="min-width: 240px; max-height: 280px; overflow-y: auto; border-radius: 10px;">
+                                    {% for p in projects %}
+                                    <div class="form-check mb-1">
+                                        <input class="form-check-input filter-checkbox" type="checkbox" name="project" value="{{ p[0] }}" id="project_{{ p[0] }}" {% if p[0] in project_filter %}checked{% endif %}>
+                                        <label class="form-check-label small font-monospace" for="project_{{ p[0] }}">{{ p[1] or p[0] }}</label>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted text-uppercase mb-1">Repositories</label>
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center bg-white" type="button" id="repoDropdownBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside" style="border-radius: 8px; border: 1px solid #8A94A6; padding: 10px 14px;">
+                                    <span class="text-truncate dropdown-label">[All]</span>
+                                </button>
+                                <div class="dropdown-menu p-3 w-100 shadow-lg" aria-labelledby="repoDropdownBtn" style="min-width: 240px; max-height: 280px; overflow-y: auto; border-radius: 10px;">
+                                    {% for r in repositories %}
+                                    <div class="form-check mb-1">
+                                        <input class="form-check-input filter-checkbox" type="checkbox" name="repository" value="{{ r[0] }}" id="repo_{{ r[0] }}" {% if r[0] in repository_filter %}checked{% endif %}>
+                                        <label class="form-check-label small font-monospace" for="repo_{{ r[0] }}">{{ r[1] or r[0] }}</label>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Column 2: Status & Severity -->
+                    <div class="col-md-3">
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted text-uppercase mb-1">Status</label>
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center bg-white" type="button" id="statusDropdownBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside" style="border-radius: 8px; border: 1px solid #8A94A6; padding: 10px 14px;">
+                                    <span class="text-truncate dropdown-label">[All]</span>
+                                </button>
+                                <div class="dropdown-menu p-3 w-100 shadow-lg" aria-labelledby="statusDropdownBtn" style="min-width: 240px; max-height: 280px; overflow-y: auto; border-radius: 10px;">
+                                    {% for s in statuses %}
+                                    <div class="form-check mb-1">
+                                        <input class="form-check-input filter-checkbox" type="checkbox" name="status" value="{{ s[0] }}" id="status_{{ s[0] }}" {% if s[0] in status_filter %}checked{% endif %}>
+                                        <label class="form-check-label small font-monospace" for="status_{{ s[0] }}">{{ s[1] or s[0] }}</label>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted text-uppercase mb-1">Severity</label>
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center bg-white" type="button" id="severityDropdownBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside" style="border-radius: 8px; border: 1px solid #8A94A6; padding: 10px 14px;">
+                                    <span class="text-truncate dropdown-label">[All]</span>
+                                </button>
+                                <div class="dropdown-menu p-3 w-100 shadow-lg" aria-labelledby="severityDropdownBtn" style="min-width: 240px; max-height: 280px; overflow-y: auto; border-radius: 10px;">
+                                    {% for s in severities %}
+                                    <div class="form-check mb-1">
+                                        <input class="form-check-input filter-checkbox" type="checkbox" name="severity" value="{{ s[0] }}" id="severity_{{ s[0] }}" {% if s[0] in severity_filter %}checked{% endif %}>
+                                        <label class="form-check-label small font-monospace" for="severity_{{ s[0] }}">{{ s[1] or s[0] }}</label>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Column 3: Priority, Effort & Taxonomy -->
+                    <div class="col-md-3">
+                        <div class="row g-2">
+                            <div class="col-6 mb-2">
+                                <label class="form-label small fw-bold text-muted text-uppercase mb-1">Priority</label>
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center bg-white" type="button" id="priorityDropdownBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside" style="border-radius: 8px; border: 1px solid #8A94A6; padding: 10px 14px; font-size: 0.8rem;">
+                                        <span class="text-truncate dropdown-label">[All]</span>
+                                    </button>
+                                    <div class="dropdown-menu p-3 shadow-lg" aria-labelledby="priorityDropdownBtn" style="min-width: 200px; max-height: 240px; overflow-y: auto; border-radius: 10px;">
+                                        {% for p in priorities %}
+                                        <div class="form-check mb-1">
+                                            <input class="form-check-input filter-checkbox" type="checkbox" name="priority" value="{{ p[0] }}" id="priority_{{ p[0] }}" {% if p[0] in priority_filter %}checked{% endif %}>
+                                            <label class="form-check-label small font-monospace" for="priority_{{ p[0] }}">{{ p[1] or p[0] }}</label>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6 mb-2">
+                                <label class="form-label small fw-bold text-muted text-uppercase mb-1">Effort</label>
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center bg-white" type="button" id="effortDropdownBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside" style="border-radius: 8px; border: 1px solid #8A94A6; padding: 10px 14px; font-size: 0.8rem;">
+                                        <span class="text-truncate dropdown-label">[All]</span>
+                                    </button>
+                                    <div class="dropdown-menu p-3 shadow-lg" aria-labelledby="effortDropdownBtn" style="min-width: 200px; max-height: 240px; overflow-y: auto; border-radius: 10px;">
+                                        {% for e in efforts %}
+                                        <div class="form-check mb-1">
+                                            <input class="form-check-input filter-checkbox" type="checkbox" name="expected_effort" value="{{ e[0] }}" id="effort_{{ e[0] }}" {% if e[0] in expected_effort_filter %}checked{% endif %}>
+                                            <label class="form-check-label small font-monospace" for="effort_{{ e[0] }}">{{ e[1] or e[0] }}</label>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row g-2">
+                            <div class="col-6 mb-2">
+                                <label class="form-label small fw-bold text-muted text-uppercase mb-1">Domain</label>
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center bg-white" type="button" id="domainDropdownBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside" style="border-radius: 8px; border: 1px solid #8A94A6; padding: 10px 14px; font-size: 0.8rem;">
+                                        <span class="text-truncate dropdown-label">[All]</span>
+                                    </button>
+                                    <div class="dropdown-menu p-3 shadow-lg" aria-labelledby="domainDropdownBtn" style="min-width: 200px; max-height: 240px; overflow-y: auto; border-radius: 10px;">
+                                        {% for d in domains %}
+                                        <div class="form-check mb-1">
+                                            <input class="form-check-input filter-checkbox" type="checkbox" name="domain" value="{{ d[0] }}" id="domain_{{ d[0] }}" {% if d[0] in domain_filter %}checked{% endif %}>
+                                            <label class="form-check-label small font-monospace" for="domain_{{ d[0] }}">{{ d[1] or d[0] }}</label>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6 mb-2">
+                                <label class="form-label small fw-bold text-muted text-uppercase mb-1">Category</label>
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center bg-white" type="button" id="categoryDropdownBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside" style="border-radius: 8px; border: 1px solid #8A94A6; padding: 10px 14px; font-size: 0.8rem;">
+                                        <span class="text-truncate dropdown-label">[All]</span>
+                                    </button>
+                                    <div class="dropdown-menu p-3 shadow-lg" aria-labelledby="categoryDropdownBtn" style="min-width: 200px; max-height: 240px; overflow-y: auto; border-radius: 10px;">
+                                        {% for c in categories %}
+                                        <div class="form-check mb-1">
+                                            <input class="form-check-input filter-checkbox" type="checkbox" name="category" value="{{ c[0] }}" id="category_{{ c[0] }}" {% if c[0] in category_filter %}checked{% endif %}>
+                                            <label class="form-check-label small font-monospace" for="category_{{ c[0] }}">{{ c[1] or c[0] }}</label>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Column 4: Text Attributes & Life Cycle -->
+                    <div class="col-md-3">
+                        <div class="row g-2">
+                            <div class="col-6 mb-2">
+                                <label class="form-label small fw-bold text-muted text-uppercase mb-1">Tag</label>
+                                <input type="text" class="form-control form-control-sm" name="tag" value="{{ tag_filter }}" placeholder="excel">
+                            </div>
+                            <div class="col-6 mb-2">
+                                <label class="form-label small fw-bold text-muted text-uppercase mb-1">Owner</label>
+                                <input type="text" class="form-control form-control-sm" name="owner" value="{{ owner_filter }}" placeholder="agent-1">
+                            </div>
+                        </div>
+
+                        <div class="row g-2">
+                            <div class="col-6 mb-2">
+                                <label class="form-label small fw-bold text-muted text-uppercase mb-1">Retired</label>
+                                <select class="form-select form-select-sm" name="is_retired" style="padding: 6px 12px; font-size: 0.85rem;">
+                                    <option value="">[All]</option>
+                                    <option value="true" {% if is_retired_filter == True %}selected{% endif %}>Retired Only</option>
+                                    <option value="false" {% if is_retired_filter == False %}selected{% endif %}>Active Only</option>
+                                </select>
+                            </div>
+                            <div class="col-6 mb-2">
+                                <label class="form-label small fw-bold text-muted text-uppercase mb-1">Terminal</label>
+                                <select class="form-select form-select-sm" name="is_terminal" style="padding: 6px 12px; font-size: 0.85rem;">
+                                    <option value="">[All]</option>
+                                    <option value="true" {% if is_terminal_filter == True %}selected{% endif %}>Terminal Only</option>
+                                    <option value="false" {% if is_terminal_filter == False %}selected{% endif %}>Active / Open</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section: Rest of Meta Fields & Dates -->
+                <div class="row g-3 mt-1 pt-3 border-top border-light">
+                    <!-- Tech & Code Location Context -->
+                    <div class="col-md-6">
+                        <h6 class="fw-bold mb-2 text-secondary uppercase text-muted" style="font-size: 0.7rem;"><i class="fa-solid fa-code me-1"></i> Technical Code Context</h6>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.7rem;">Area / Module</label>
+                                <input type="text" class="form-control form-control-sm" name="area" value="{{ area_filter }}" placeholder="excel/writer">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.7rem;">Classification</label>
+                                <input type="text" class="form-control form-control-sm" name="classification" value="{{ classification_filter }}" placeholder="race-condition">
+                            </div>
+                        </div>
+                        <div class="row g-2 mt-2">
+                            <div class="col-6">
+                                <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.7rem;">Task ID</label>
+                                <input type="text" class="form-control form-control-sm font-monospace" name="task" value="{{ task_filter }}" placeholder="task-123">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.7rem;">Worktree</label>
+                                <input type="text" class="form-control form-control-sm font-monospace" name="worktree" value="{{ worktree_filter }}" placeholder="/work/path">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Date Bound Ranges -->
+                    <div class="col-md-6">
+                        <h6 class="fw-bold mb-2 text-secondary uppercase text-muted" style="font-size: 0.7rem;"><i class="fa-solid fa-calendar-days me-1"></i> Chronological Boundaries</h6>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.7rem;">Created After</label>
+                                <input type="date" class="form-control form-control-sm" name="created_after" value="{{ created_after_filter or '' }}">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.7rem;">Created Before</label>
+                                <input type="date" class="form-control form-control-sm" name="created_before" value="{{ created_before_filter or '' }}">
+                            </div>
+                        </div>
+                        <div class="row g-2 mt-2">
+                            <div class="col-6">
+                                <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.7rem;">Closed After</label>
+                                <input type="date" class="form-control form-control-sm" name="closed_after" value="{{ closed_after_filter or '' }}">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.7rem;">Closed Before</label>
+                                <input type="date" class="form-control form-control-sm" name="closed_before" value="{{ closed_before_filter or '' }}">
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </form>
@@ -168,16 +358,18 @@
                     <th class="ps-4" style="width: 110px;">ID</th>
                     <th style="width: 100px;">Status</th>
                     <th style="width: 90px;">Severity</th>
+                    <th style="width: 80px;">Priority</th>
                     <th>Title</th>
-                    <th style="width: 200px;">Project / Repository</th>
-                    <th style="width: 150px;">Area / Domain</th>
-                    <th class="pe-4" style="width: 120px; text-align: right;">Updated</th>
+                    <th style="width: 180px;">Project / Repository</th>
+                    <th style="width: 120px;">Area / Domain</th>
+                    <th style="width: 100px;">Owner</th>
+                    <th class="pe-4" style="width: 110px; text-align: right;">Updated</th>
                 </tr>
             </thead>
             <tbody>
                 {% if not items %}
                 <tr>
-                    <td colspan="7" class="text-center py-5 text-muted">
+                    <td colspan="9" class="text-center py-5 text-muted">
                         <i class="fa-solid fa-triangle-exclamation fa-2x mb-3 text-secondary"></i>
                         <p class="mb-0">No issues found matching the criteria.</p>
                     </td>
@@ -220,7 +412,10 @@
                         {% endif %}
                     </td>
                     <td>
-                        <a href="/issues/{{ item.issue_id }}" class="text-decoration-none d-block text-truncate fw-medium {% if item.is_retired %}text-secondary text-decoration-line-through{% else %}text-dark{% endif %}" style="max-width: 450px;">
+                        <span class="small text-muted">{{ item.priority or "—" }}</span>
+                    </td>
+                    <td>
+                        <a href="/issues/{{ item.issue_id }}" class="text-decoration-none d-block text-truncate fw-medium {% if item.is_retired %}text-secondary text-decoration-line-through{% else %}text-dark{% endif %}" style="max-width: 380px;">
                             {{ item.title or "—" }}
                         </a>
                         {% if item.tags %}
@@ -233,13 +428,16 @@
                     </td>
                     <td>
                         <span class="small text-muted">{{ item.project or "—" }}</span>
-                        <div class="small fw-semibold text-secondary text-truncate" style="max-width: 180px;">{{ item.repository or "—" }}</div>
+                        <div class="small fw-semibold text-secondary text-truncate" style="max-width: 160px;">{{ item.repository or "—" }}</div>
                     </td>
                     <td>
                         <span class="small">{{ item.area or "—" }}</span>
                         {% if item.domain %}
                         <div class="small text-muted font-monospace">{{ item.domain }}</div>
                         {% endif %}
+                    </td>
+                    <td>
+                        <span class="small text-muted">{{ item.owner or "—" }}</span>
                     </td>
                     <td class="pe-4 text-end small text-muted font-monospace">
                         {{ item.updated_at[:10] }}
@@ -257,12 +455,12 @@
         <nav>
             <ul class="pagination pagination-sm mb-0">
                 <li class="page-item {% if offset == 0 %}disabled{% endif %}">
-                    <a class="page-link" href="/?q={{ q }}&project={{ project_filter }}&repository={{ repository_filter }}&status={{ status_filter }}&severity={{ severity_filter }}&tag={{ tag_filter }}&is_retired={{ is_retired_filter }}&limit={{ limit }}&offset={{ [0, offset - limit]|max }}">
+                    <a class="page-link" href="#" onclick="submitWithOffset({{ [0, offset - limit]|max }}); return false;">
                         &laquo; Previous
                     </a>
                 </li>
                 <li class="page-item {% if (offset + limit) >= total %}disabled{% endif %}">
-                    <a class="page-link" href="/?q={{ q }}&project={{ project_filter }}&repository={{ repository_filter }}&status={{ status_filter }}&severity={{ severity_filter }}&tag={{ tag_filter }}&is_retired={{ is_retired_filter }}&limit={{ limit }}&offset={{ offset + limit }}">
+                    <a class="page-link" href="#" onclick="submitWithOffset({{ offset + limit }}); return false;">
                         Next &raquo;
                     </a>
                 </li>
@@ -276,15 +474,67 @@
 {% block scripts %}
 <script>
 function updateProjectContext(project) {
-    const url = new URL(window.location.href);
-    if (project) {
-        url.searchParams.set("project", project);
-    } else {
-        url.searchParams.delete("project");
-    }
-    // Reset offset when changing project context
-    url.searchParams.delete("offset");
-    window.location.href = url.toString();
+    window.location.href = "/set-project?project=" + (project || "ALL");
 }
+
+function submitWithOffset(newOffset) {
+    document.getElementById("form-offset-input").value = newOffset;
+    document.getElementById("filter-form").submit();
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+    // Find all checkbox dropdowns
+    document.querySelectorAll(".dropdown").forEach(function(dropdown) {
+        const menu = dropdown.querySelector(".dropdown-menu");
+        const checkboxes = menu ? menu.querySelectorAll("input[type='checkbox']") : [];
+        const button = dropdown.querySelector(".dropdown-toggle");
+        if (!button || checkboxes.length === 0) return;
+        const labelSpan = button.querySelector(".dropdown-label") || button;
+
+        function updateLabel() {
+            const checked = [];
+            checkboxes.forEach(function(cb) {
+                if (cb.checked) {
+                    const labelText = menu.querySelector("label[for='" + cb.id + "']")?.textContent || cb.value;
+                    checked.push(labelText.trim());
+                }
+            });
+            if (checked.length === 0) {
+                labelSpan.textContent = "[All]";
+                button.classList.remove("border-success", "bg-success-subtle", "text-success");
+                button.classList.add("border-secondary");
+            } else if (checked.length <= 2) {
+                labelSpan.textContent = checked.join(", ");
+                button.classList.remove("border-secondary");
+                button.classList.add("border-success", "bg-success-subtle", "text-success");
+            } else {
+                labelSpan.textContent = checked.length + " selected";
+                button.classList.remove("border-secondary");
+                button.classList.add("border-success", "bg-success-subtle", "text-success");
+            }
+        }
+
+        checkboxes.forEach(function(cb) {
+            cb.addEventListener("change", updateLabel);
+        });
+
+        // Initialize label
+        updateLabel();
+    });
+
+    // Option Collapse chevron rotation
+    const collapseEl = document.getElementById('advancedFiltersCollapse');
+    const chevron = document.getElementById('advanced-chevron');
+    if (collapseEl && chevron) {
+        collapseEl.addEventListener('show.bs.collapse', function () {
+            chevron.classList.remove('fa-chevron-down');
+            chevron.classList.add('fa-chevron-up');
+        });
+        collapseEl.addEventListener('hide.bs.collapse', function () {
+            chevron.classList.remove('fa-chevron-up');
+            chevron.classList.add('fa-chevron-down');
+        });
+    }
+});
 </script>
 {% endblock %}

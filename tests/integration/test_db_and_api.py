@@ -196,11 +196,10 @@ def test_timestamp_filtering():
     response = client.post("/api/v1/issues", json=payload, headers=headers)
     issue_data = response.json()["issue"]
     issue_id = issue_data["issue_id"]
-    created_at_str = issue_data["created_at"]
 
     # 2. Query within range
     response = client.get(
-        f"/api/v1/issues?created_from=2020-01-01T00:00:00Z&created_to=2030-01-01T00:00:00Z",
+        "/api/v1/issues?created_from=2020-01-01T00:00:00Z&created_to=2030-01-01T00:00:00Z",
         headers=headers
     )
     assert response.status_code == 200
@@ -209,9 +208,59 @@ def test_timestamp_filtering():
 
     # 3. Query outside range (future)
     response_future = client.get(
-        f"/api/v1/issues?created_from=2099-01-01T00:00:00Z",
+        "/api/v1/issues?created_from=2099-01-01T00:00:00Z",
         headers=headers
     )
     assert response_future.status_code == 200
     assert len(response_future.json()["items"]) == 0
+
+
+def test_multi_select_and_closed_date_filtering():
+    from issue_hub.database import SessionLocal
+    from issue_hub.search import query_issues
+    from issue_hub.models import Issue
+    db = SessionLocal()
+    try:
+        # Create a couple of issues with specific statuses and projects to test multi-select
+        issue1 = Issue(
+            issue_id="Bug-8801",
+            sequence_number=8801,
+            project="tessallite",
+            repository="repo1",
+            status="OPEN",
+            severity="CRITICAL",
+            title="Multi Test 1",
+            description="Testing multi-select queries.",
+        )
+        issue2 = Issue(
+            issue_id="Bug-8802",
+            sequence_number=8802,
+            project="tessallite",
+            repository="repo2",
+            status="RESERVED",
+            severity="HIGH",
+            title="Multi Test 2",
+            description="Testing multi-select queries.",
+        )
+        db.add(issue1)
+        db.add(issue2)
+        db.commit()
+
+        # Query using status as a list
+        items, total = query_issues(db, status=["OPEN", "RESERVED"])
+        ids = [i.issue_id for i in items]
+        assert "Bug-8801" in ids
+        assert "Bug-8802" in ids
+
+        # Query using project as a list
+        items2, total2 = query_issues(db, project=["tessallite"])
+        ids2 = [i.issue_id for i in items2]
+        assert "Bug-8801" in ids2
+
+        # Clean up
+        db.delete(issue1)
+        db.delete(issue2)
+        db.commit()
+    finally:
+        db.close()
 

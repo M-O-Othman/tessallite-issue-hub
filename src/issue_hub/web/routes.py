@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Depends, Form, HTTPException, status
+from fastapi import APIRouter, Request, Depends, Form, HTTPException, status, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import text, func
@@ -6,7 +6,10 @@ from sqlalchemy.orm import Session
 import bcrypt
 import markdown
 import logging
-from typing import Optional
+import html
+import secrets
+from html.parser import HTMLParser
+from typing import Optional, List
 from pathlib import Path
 
 from issue_hub.database import get_db
@@ -27,10 +30,21 @@ if not templates_dir.is_dir():
     
 templates = Jinja2Templates(directory=str(templates_dir))
 
-import html
-import markdown
-import secrets
-from html.parser import HTMLParser
+def get_all_projects():
+    from issue_hub.database import SessionLocal
+    from issue_hub.models import LookupValue
+    db = SessionLocal()
+    try:
+        return db.query(LookupValue.value, LookupValue.label).filter(
+            LookupValue.lookup_type == "PROJECT",
+            LookupValue.is_active.is_(True)
+        ).all()
+    except Exception:
+        return []
+    finally:
+        db.close()
+
+templates.env.globals["get_all_projects"] = get_all_projects
 
 class SafeHTMLSanitizer(HTMLParser):
     def __init__(self):
@@ -161,17 +175,43 @@ def get_logout(request: Request):
     return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
 
 
+@router.get("/set-project")
+def set_global_project(request: Request, project: Optional[str] = None):
+    referer = request.headers.get("referer", "/")
+    if "/login" in referer or "/logout" in referer:
+        referer = "/"
+    response = RedirectResponse(url=referer, status_code=status.HTTP_303_SEE_OTHER)
+    if project:
+        response.set_cookie("global_project", project, max_age=365 * 24 * 3600, path="/")
+    else:
+        response.delete_cookie("global_project", path="/")
+    return response
+
+
 @router.get("/", response_class=HTMLResponse)
 def get_issues_list(
     request: Request,
     q: Optional[str] = None,
-    project: Optional[str] = None,
-    repository: Optional[str] = None,
-    status: Optional[str] = None,
-    severity: Optional[str] = None,
+    project: Optional[List[str]] = Query(None),
+    repository: Optional[List[str]] = Query(None),
+    status: Optional[List[str]] = Query(None),
+    severity: Optional[List[str]] = Query(None),
+    priority: Optional[List[str]] = Query(None),
+    domain: Optional[List[str]] = Query(None),
+    category: Optional[List[str]] = Query(None),
+    expected_effort: Optional[List[str]] = Query(None),
+    area: Optional[str] = None,
+    classification: Optional[str] = None,
+    owner: Optional[str] = None,
+    task: Optional[str] = None,
+    worktree: Optional[str] = None,
     tag: Optional[str] = None,
     is_retired: Optional[str] = None,
     is_terminal: Optional[str] = None,
+    created_after: Optional[str] = None,
+    created_before: Optional[str] = None,
+    closed_after: Optional[str] = None,
+    closed_before: Optional[str] = None,
     limit: int = 100,
     offset: int = 0,
     db: Session = Depends(get_db)
@@ -179,14 +219,66 @@ def get_issues_list(
     if not is_authenticated(request):
         return redirect_to_login()
         
-    # Normalize empty strings submitted by browser forms to None
+    def normalize_list(lst: Optional[List[str]]) -> Optional[List[str]]:
+        if not lst:
+            return None
+        res = [item.strip() for item in lst if item and item.strip()]
+        return res if res else None
+
+    # Retrieve global project cookie context
+    global_project = request.cookies.get("global_project")
+    
+    project_norm = normalize_list(project)
+    # If no explicit project selected but site-wide project is active, filter by active global project
+    if not project_norm and global_project and global_project.strip() and global_project != "ALL":
+        project_norm = [global_project.strip()]
+        
+    repository_norm = normalize_list(repository)
+    status_norm = normalize_list(status)
+    severity_norm = normalize_list(severity)
+    priority_norm = normalize_list(priority)
+    domain_norm = normalize_list(domain)
+    category_norm = normalize_list(category)
+    expected_effort_norm = normalize_list(expected_effort)
+    
     q_norm = q.strip() if q and q.strip() else None
-    project_norm = project.strip() if project and project.strip() else None
-    repository_norm = repository.strip() if repository and repository.strip() else None
-    status_norm = status.strip() if status and status.strip() else None
-    severity_norm = severity.strip() if severity and severity.strip() else None
+    area_norm = area.strip() if area and area.strip() else None
+    classification_norm = classification.strip() if classification and classification.strip() else None
+    owner_norm = owner.strip() if owner and owner.strip() else None
+    task_norm = task.strip() if task and task.strip() else None
+    worktree_norm = worktree.strip() if worktree and worktree.strip() else None
     tag_norm = tag.strip() if tag and tag.strip() else None
     
+    # Parse date range boundaries into datetimes (Gate 2)
+    from datetime import datetime
+    created_after_dt: Optional[datetime] = None
+    if created_after and created_after.strip():
+        try:
+            created_after_dt = datetime.strptime(created_after.strip(), "%Y-%m-%d")
+        except ValueError:
+            pass
+            
+    created_before_dt: Optional[datetime] = None
+    if created_before and created_before.strip():
+        try:
+            created_before_dt = datetime.strptime(created_before.strip() + " 23:59:59", "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            pass
+
+    closed_after_dt: Optional[datetime] = None
+    if closed_after and closed_after.strip():
+        try:
+            closed_after_dt = datetime.strptime(closed_after.strip(), "%Y-%m-%d")
+        except ValueError:
+            pass
+            
+    closed_before_dt: Optional[datetime] = None
+    if closed_before and closed_before.strip():
+        try:
+            closed_before_dt = datetime.strptime(closed_before.strip() + " 23:59:59", "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            pass
+
     # Safe boolean parsing of parameters
     is_retired_bool: Optional[bool] = None
     if is_retired == "true":
@@ -205,6 +297,10 @@ def get_issues_list(
     repositories = db.query(LookupValue.value, LookupValue.label).filter(LookupValue.lookup_type == "REPOSITORY", LookupValue.is_active.is_(True)).all()
     statuses = db.query(LookupValue.value, LookupValue.label, LookupValue.is_terminal).filter(LookupValue.lookup_type == "STATUS", LookupValue.is_active.is_(True)).all()
     severities = db.query(LookupValue.value, LookupValue.label).filter(LookupValue.lookup_type == "SEVERITY", LookupValue.is_active.is_(True)).all()
+    priorities = db.query(LookupValue.value, LookupValue.label).filter(LookupValue.lookup_type == "PRIORITY", LookupValue.is_active.is_(True)).all()
+    efforts = db.query(LookupValue.value, LookupValue.label).filter(LookupValue.lookup_type == "EFFORT", LookupValue.is_active.is_(True)).all()
+    domains = db.query(LookupValue.value, LookupValue.label).filter(LookupValue.lookup_type == "DOMAIN", LookupValue.is_active.is_(True)).all()
+    categories = db.query(LookupValue.value, LookupValue.label).filter(LookupValue.lookup_type == "CATEGORY", LookupValue.is_active.is_(True)).all()
     
     # Query issues using normalized parameters
     items, total = query_issues(
@@ -214,9 +310,22 @@ def get_issues_list(
         repository=repository_norm,
         status=status_norm,
         severity=severity_norm,
+        priority=priority_norm,
+        expected_effort=expected_effort_norm,
+        area=area_norm,
+        domain=domain_norm,
+        category=category_norm,
+        classification=classification_norm,
+        owner=owner_norm,
+        task=task_norm,
+        worktree=worktree_norm,
         tag=tag_norm,
         is_retired=is_retired_bool,
         is_terminal=is_terminal_bool,
+        created_from=created_after_dt,
+        created_to=created_before_dt,
+        closed_from=closed_after_dt,
+        closed_to=closed_before_dt,
         limit=limit,
         offset=offset,
     )
@@ -229,11 +338,11 @@ def get_issues_list(
     q_retired = db.query(Issue).filter(Issue.is_retired.is_(True))
     
     if project_norm:
-        q_all = q_all.filter(Issue.project == project_norm)
-        q_open = q_open.filter(Issue.project == project_norm)
-        q_closed = q_closed.filter(Issue.project == project_norm)
-        q_reserved = q_reserved.filter(Issue.project == project_norm)
-        q_retired = q_retired.filter(Issue.project == project_norm)
+        q_all = q_all.filter(Issue.project.in_(project_norm))
+        q_open = q_open.filter(Issue.project.in_(project_norm))
+        q_closed = q_closed.filter(Issue.project.in_(project_norm))
+        q_reserved = q_reserved.filter(Issue.project.in_(project_norm))
+        q_retired = q_retired.filter(Issue.project.in_(project_norm))
         
     count_all = q_all.count()
     count_open = q_open.count()
@@ -250,17 +359,34 @@ def get_issues_list(
             "limit": limit,
             "offset": offset,
             "q": q_norm or "",
-            "project_filter": project_norm or "",
-            "repository_filter": repository_norm or "",
-            "status_filter": status_norm or "",
-            "severity_filter": severity_norm or "",
+            "project_filter": project_norm or [],
+            "repository_filter": repository_norm or [],
+            "status_filter": status_norm or [],
+            "severity_filter": severity_norm or [],
+            "priority_filter": priority_norm or [],
+            "domain_filter": domain_norm or [],
+            "category_filter": category_norm or [],
+            "expected_effort_filter": expected_effort_norm or [],
+            "area_filter": area_norm or "",
+            "classification_filter": classification_norm or "",
+            "owner_filter": owner_norm or "",
+            "task_filter": task_norm or "",
+            "worktree_filter": worktree_norm or "",
             "tag_filter": tag_norm or "",
             "is_retired_filter": is_retired_bool,
             "is_terminal_filter": is_terminal_bool,
+            "created_after_filter": created_after or "",
+            "created_before_filter": created_before or "",
+            "closed_after_filter": closed_after or "",
+            "closed_before_filter": closed_before or "",
             "projects": projects,
             "repositories": repositories,
             "statuses": statuses,
             "severities": severities,
+            "priorities": priorities,
+            "efforts": efforts,
+            "domains": domains,
+            "categories": categories,
             "counts": {
                 "all": count_all,
                 "open": count_open,
@@ -295,6 +421,11 @@ def get_create_issue(request: Request, db: Session = Depends(get_db)):
         
     global_template = get_project_key_template(db, None)
     
+    global_project = request.cookies.get("global_project")
+    form_data = None
+    if global_project and global_project != "ALL":
+        form_data = {"project": global_project}
+        
     return templates.TemplateResponse(
         request,
         "create.html",
@@ -309,6 +440,7 @@ def get_create_issue(request: Request, db: Session = Depends(get_db)):
             "categories": categories,
             "next_seq": next_seq,
             "global_template": global_template,
+            "form_data": form_data,
             "error": None
         }
     )
@@ -333,6 +465,9 @@ def post_create_issue(
     category: Optional[str] = Form(None),
     refs: Optional[str] = Form(None),
     source: Optional[str] = Form(None),
+    owner: Optional[str] = Form(None),
+    aka: Optional[str] = Form(None),
+    related_to: Optional[str] = Form(None),
     tags_raw: Optional[str] = Form(None),
     recommended_next_step: Optional[str] = Form(None),
     reserve: bool = Form(False),
@@ -355,8 +490,8 @@ def post_create_issue(
             project=project,
             repository=repository,
             branch=branch,
-            worktree=worktree,
-            task=task,
+            worktree=worktree or None,
+            task=task or None,
             status=status_val,
             severity=severity or None,
             priority=priority or None,
@@ -369,6 +504,9 @@ def post_create_issue(
             category=category or None,
             refs=refs or None,
             source=source or None,
+            owner=owner or None,
+            aka=aka or None,
+            related_to=related_to or None,
             recommended_next_step=recommended_next_step or None,
             tags=tags_list,
             reserve=reserve,
@@ -421,6 +559,9 @@ def post_create_issue(
                     "category": category or "",
                     "refs": refs or "",
                     "source": source or "",
+                    "owner": owner or "",
+                    "aka": aka or "",
+                    "related_to": related_to or "",
                     "tags_raw": tags_raw or "",
                     "recommended_next_step": recommended_next_step or "",
                     "reserve": reserve,
@@ -486,6 +627,7 @@ def post_edit_issue(
     repository: str = Form(...),
     branch: str = Form("main"),
     worktree: Optional[str] = Form(None),
+    task: Optional[str] = Form(None),
     status_val: str = Form("OPEN"),
     severity: Optional[str] = Form(None),
     priority: Optional[str] = Form(None),
@@ -500,8 +642,11 @@ def post_edit_issue(
     source: Optional[str] = Form(None),
     owner: Optional[str] = Form(None),
     aka: Optional[str] = Form(None),
+    related_to: Optional[str] = Form(None),
     tags_raw: Optional[str] = Form(None),
     recommended_next_step: Optional[str] = Form(None),
+    created_at: Optional[str] = Form(None),
+    updated_at: Optional[str] = Form(None),
     csrf_token: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
@@ -522,6 +667,7 @@ def post_edit_issue(
                 repository=repository,
                 branch=branch,
                 worktree=worktree or None,
+                task=task or None,
                 status=status_val,
                 severity=severity or None,
                 priority=priority or None,
@@ -536,11 +682,30 @@ def post_edit_issue(
                 source=source or None,
                 owner=owner or None,
                 aka=aka or None,
+                related_to=related_to or None,
                 recommended_next_step=recommended_next_step or None,
                 tags=tags_list,
             )
         )
         update_issue(db, issue_id, patch)
+
+        # Update custom dates (created_at / updated_at) if provided (Gate 2)
+        issue_model = db.query(Issue).filter(func.lower(Issue.issue_id) == func.lower(issue_id)).first()
+        if issue_model:
+            from datetime import datetime, timezone
+            if created_at and created_at.strip():
+                try:
+                    dt = datetime.strptime(created_at.strip(), "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc)
+                    issue_model.created_at = dt
+                except ValueError:
+                    pass
+            if updated_at and updated_at.strip():
+                try:
+                    dt = datetime.strptime(updated_at.strip(), "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc)
+                    issue_model.updated_at = dt
+                except ValueError:
+                    pass
+            db.commit()
     except Exception as e:
         logger.error(f"Web edit failed: {e}")
         return render_detail_with_error(request, issue_id, db, str(e))
@@ -652,8 +817,6 @@ def get_settings_page(request: Request, error: Optional[str] = None, db: Session
         }
     )
 
-from issue_hub.key_generation import validate_key_template
-
 @router.post("/settings/template", response_class=HTMLResponse)
 def post_update_template(
     request: Request,
@@ -661,6 +824,7 @@ def post_update_template(
     csrf_token: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
+    from issue_hub.key_generation import validate_key_template
     if not is_authenticated(request):
         return redirect_to_login()
         
@@ -707,8 +871,12 @@ def get_visualization(request: Request, db: Session = Depends(get_db)):
         return redirect_to_login()
         
     import json
-    # Fetch all issues in the database
-    all_issues = db.query(Issue).all()
+    # Retrieve global project cookie context
+    global_project = request.cookies.get("global_project")
+    query = db.query(Issue)
+    if global_project and global_project != "ALL":
+        query = query.filter(Issue.project == global_project)
+    all_issues = query.all()
     # Escape literal '</script>' tags to prevent premature script tag closure in HTML templates (Gate 2)
     issues_json = json.dumps([i.to_dict() for i in all_issues], default=str).replace("</script>", "<\\/script>").replace("</Script>", "<\\/Script>")
     

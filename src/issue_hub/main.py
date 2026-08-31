@@ -1,8 +1,10 @@
+import json
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, status, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, HTMLResponse
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.types import ASGIApp, Scope, Receive, Send
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import OperationalError, InterfaceError
 import logging
@@ -92,7 +94,7 @@ def database_operational_error_handler(request, exc: OperationalError):
             content=error_content
         )
     else:
-        html_content = f"""
+        html_content = """
         <!DOCTYPE html>
         <html lang="en">
         <head>
@@ -101,8 +103,8 @@ def database_operational_error_handler(request, exc: OperationalError):
             <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
             <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
             <style>
-                body {{ font-family: sans-serif; background-color: #F2F7F4; color: #333333; }}
-                .card {{ border: 1px solid #CBD5E1; border-radius: 14px; background: #FFFFFF; }}
+                body { font-family: sans-serif; background-color: #F2F7F4; color: #333333; }
+                .card { border: 1px solid #CBD5E1; border-radius: 14px; background: #FFFFFF; }
             </style>
         </head>
         <body class="d-flex align-items-center justify-content-center" style="min-height: 100vh;">
@@ -127,7 +129,7 @@ def validation_exception_handler(request, exc: RequestValidationError):
     from fastapi.encoders import jsonable_encoder
     errors_list = []
     for err in exc.errors():
-        loc_str = " -> ".join(str(l) for l in err.get("loc", []))
+        loc_str = " -> ".join(str(loc) for loc in err.get("loc", []))
         errors_list.append(f"{loc_str}: {err.get('msg', 'invalid value')}")
     
     return JSONResponse(
@@ -168,9 +170,6 @@ def http_exception_handler(request, exc: HTTPException):
             }
         }
     )
-
-from starlette.types import ASGIApp, Scope, Receive, Send
-import json
 
 class LimitUploadSizeMiddleware:
     def __init__(self, app: ASGIApp, max_upload_size: int = 10 * 1024 * 1024):

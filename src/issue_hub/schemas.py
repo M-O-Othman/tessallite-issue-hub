@@ -25,6 +25,7 @@ class CreateIssueRequest(BaseModel):
     source: Optional[str] = None
     aka: Optional[str] = None
     owner: Optional[str] = None
+    related_to: Optional[str] = None
     recommended_next_step: Optional[str] = None
     tags: List[str] = Field(default_factory=list)
 

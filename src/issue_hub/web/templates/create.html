@@ -162,6 +162,18 @@
                             <input type="text" class="form-control form-control-sm" id="source" name="source" value="{{ form_data.source if form_data else '' }}" placeholder="Agent review">
                         </div>
                         <div class="col-md-4">
+                            <label for="owner" class="form-label small fw-bold text-muted">Owner</label>
+                            <input type="text" class="form-control form-control-sm" id="owner" name="owner" value="{{ form_data.owner if form_data else '' }}" placeholder="agent-id or person">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="aka" class="form-label small fw-bold text-muted">AKA Aliases</label>
+                            <input type="text" class="form-control form-control-sm font-monospace" id="aka" name="aka" value="{{ form_data.aka if form_data else '' }}" placeholder="XMLA-9627">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="related_to" class="form-label small fw-bold text-muted">Related To (Issue ID)</label>
+                            <input type="text" class="form-control form-control-sm font-monospace" id="related_to" name="related_to" value="{{ form_data.related_to if form_data else '' }}" placeholder="Bug-XXXX">
+                        </div>
+                        <div class="col-md-4">
                             <label for="tags_raw" class="form-label small fw-bold text-muted">Tags (Comma-separated)</label>
                             <input type="text" class="form-control form-control-sm" id="tags_raw" name="tags_raw" value="{{ form_data.tags_raw if form_data else '' }}" placeholder="excel, xmla, perf">
                         </div>

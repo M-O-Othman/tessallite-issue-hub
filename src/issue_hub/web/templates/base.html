@@ -166,6 +166,22 @@
                     </li>
                 </ul>
                 <div class="d-flex align-items-center text-light">
+                    <!-- Global Project Selector Dropdown Context -->
+                    {% set global_proj = request.cookies.get("global_project") or "ALL" %}
+                    <div class="dropdown me-4">
+                        <button class="btn btn-sm btn-outline-light dropdown-toggle font-monospace" type="button" id="globalProjectDropdown" data-bs-toggle="dropdown" aria-expanded="false" style="border-radius: 8px; font-size: 0.85rem; padding: 4px 12px; border-color: rgba(255,255,255,0.35);">
+                            <i class="fa-solid fa-folder-open text-warning me-1"></i>
+                            Project: <strong>{{ global_proj }}</strong>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow-sm" aria-labelledby="globalProjectDropdown" style="border-radius: 10px;">
+                            <li><a class="dropdown-item {% if global_proj == 'ALL' or not global_proj %}active{% endif %} font-monospace small" href="/set-project?project=ALL">[ALL PROJECTS]</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            {% for p in get_all_projects() %}
+                            <li><a class="dropdown-item {% if global_proj == p[0] %}active{% endif %} font-monospace small" href="/set-project?project={{ p[0] }}">{{ p[1] or p[0] }}</a></li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+
                     <span class="me-3 small"><i class="fa-solid fa-user me-1 text-secondary"></i> {{ request.session.get("username") }}</span>
                     <a href="/logout" class="btn-logout"><i class="fa-solid fa-right-from-bracket me-1"></i> Logout</a>
                 </div>

@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, text, desc, asc, cast, String, func
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Union
 from datetime import datetime
 
 from issue_hub.models import Issue, LookupValue
@@ -9,18 +9,18 @@ def query_issues(
     db: Session,
     id_: Optional[str] = None,
     q: Optional[str] = None,
-    project: Optional[str] = None,
-    repository: Optional[str] = None,
+    project: Optional[Union[str, List[str]]] = None,
+    repository: Optional[Union[str, List[str]]] = None,
     branch: Optional[str] = None,
     worktree: Optional[str] = None,
     task: Optional[str] = None,
-    status: Optional[str] = None,
-    severity: Optional[str] = None,
-    priority: Optional[str] = None,
-    expected_effort: Optional[str] = None,
+    status: Optional[Union[str, List[str]]] = None,
+    severity: Optional[Union[str, List[str]]] = None,
+    priority: Optional[Union[str, List[str]]] = None,
+    expected_effort: Optional[Union[str, List[str]]] = None,
     area: Optional[str] = None,
-    domain: Optional[str] = None,
-    category: Optional[str] = None,
+    domain: Optional[Union[str, List[str]]] = None,
+    category: Optional[Union[str, List[str]]] = None,
     classification: Optional[str] = None,
     owner: Optional[str] = None,
     tag: Optional[str] = None,
@@ -30,6 +30,8 @@ def query_issues(
     created_to: Optional[datetime] = None,
     updated_from: Optional[datetime] = None,
     updated_to: Optional[datetime] = None,
+    closed_from: Optional[datetime] = None,
+    closed_to: Optional[datetime] = None,
     limit: Optional[int] = None,
     offset: int = 0,
     sort: Optional[str] = None,
@@ -51,9 +53,15 @@ def query_issues(
 
     # Exact field filters
     if project:
-        query = query.filter(Issue.project == project)
+        if isinstance(project, list):
+            query = query.filter(Issue.project.in_(project))
+        else:
+            query = query.filter(Issue.project == project)
     if repository:
-        query = query.filter(Issue.repository == repository)
+        if isinstance(repository, list):
+            query = query.filter(Issue.repository.in_(repository))
+        else:
+            query = query.filter(Issue.repository == repository)
     if branch:
         query = query.filter(Issue.branch == branch)
     if worktree:
@@ -61,19 +69,37 @@ def query_issues(
     if task:
         query = query.filter(Issue.task == task)
     if status:
-        query = query.filter(Issue.status == status)
+        if isinstance(status, list):
+            query = query.filter(Issue.status.in_(status))
+        else:
+            query = query.filter(Issue.status == status)
     if severity:
-        query = query.filter(Issue.severity == severity)
+        if isinstance(severity, list):
+            query = query.filter(Issue.severity.in_(severity))
+        else:
+            query = query.filter(Issue.severity == severity)
     if priority:
-        query = query.filter(Issue.priority == priority)
+        if isinstance(priority, list):
+            query = query.filter(Issue.priority.in_(priority))
+        else:
+            query = query.filter(Issue.priority == priority)
     if expected_effort:
-        query = query.filter(Issue.expected_effort == expected_effort)
+        if isinstance(expected_effort, list):
+            query = query.filter(Issue.expected_effort.in_(expected_effort))
+        else:
+            query = query.filter(Issue.expected_effort == expected_effort)
     if area:
         query = query.filter(Issue.area == area)
     if domain:
-        query = query.filter(Issue.domain == domain)
+        if isinstance(domain, list):
+            query = query.filter(Issue.domain.in_(domain))
+        else:
+            query = query.filter(Issue.domain == domain)
     if category:
-        query = query.filter(Issue.category == category)
+        if isinstance(category, list):
+            query = query.filter(Issue.category.in_(category))
+        else:
+            query = query.filter(Issue.category == category)
     if classification:
         query = query.filter(Issue.classification == classification)
     if owner:
@@ -111,6 +137,10 @@ def query_issues(
         query = query.filter(Issue.updated_at >= updated_from)
     if updated_to is not None:
         query = query.filter(Issue.updated_at <= updated_to)
+    if closed_from is not None:
+        query = query.filter(Issue.retired_at >= closed_from)
+    if closed_to is not None:
+        query = query.filter(Issue.retired_at <= closed_to)
 
     # Text Search q and custom scoring/ranking
     if q:

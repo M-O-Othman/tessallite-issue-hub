@@ -59,6 +59,86 @@
             {% endif %}
 
             <h4 class="fw-bold text-dark mt-2 mb-3">{{ issue.title or "[No Title]" }}</h4>
+
+            <!-- Metadata Summary Grid -->
+            <div class="row g-2 mb-3 small">
+                <div class="col-sm-4 col-6">
+                    <div class="text-muted fw-bold text-uppercase" style="font-size:0.7rem;">Project</div>
+                    <div class="fw-semibold">{{ issue.project or "—" }}</div>
+                </div>
+                <div class="col-sm-4 col-6">
+                    <div class="text-muted fw-bold text-uppercase" style="font-size:0.7rem;">Repository</div>
+                    <div class="fw-semibold text-truncate">{{ issue.repository or "—" }}</div>
+                </div>
+                <div class="col-sm-4 col-6">
+                    <div class="text-muted fw-bold text-uppercase" style="font-size:0.7rem;">Branch</div>
+                    <div class="font-monospace">{{ issue.branch or "—" }}</div>
+                </div>
+                <div class="col-sm-4 col-6">
+                    <div class="text-muted fw-bold text-uppercase" style="font-size:0.7rem;">Severity</div>
+                    <div>{% if issue.severity == "CRITICAL" %}<span class="text-danger fw-bold">CRITICAL</span>{% elif issue.severity == "HIGH" %}<span class="text-warning fw-bold">HIGH</span>{% elif issue.severity == "MEDIUM" %}<span class="text-primary">MEDIUM</span>{% elif issue.severity == "LOW" %}<span class="text-success">LOW</span>{% else %}{{ issue.severity or "—" }}{% endif %}</div>
+                </div>
+                <div class="col-sm-4 col-6">
+                    <div class="text-muted fw-bold text-uppercase" style="font-size:0.7rem;">Priority</div>
+                    <div>{{ issue.priority or "—" }}</div>
+                </div>
+                <div class="col-sm-4 col-6">
+                    <div class="text-muted fw-bold text-uppercase" style="font-size:0.7rem;">Expected Effort</div>
+                    <div>{{ issue.expected_effort or "—" }}</div>
+                </div>
+                <div class="col-sm-4 col-6">
+                    <div class="text-muted fw-bold text-uppercase" style="font-size:0.7rem;">Owner</div>
+                    <div>{{ issue.owner or "—" }}</div>
+                </div>
+                <div class="col-sm-4 col-6">
+                    <div class="text-muted fw-bold text-uppercase" style="font-size:0.7rem;">Area</div>
+                    <div>{{ issue.area or "—" }}</div>
+                </div>
+                <div class="col-sm-4 col-6">
+                    <div class="text-muted fw-bold text-uppercase" style="font-size:0.7rem;">Domain / Category</div>
+                    <div>{{ issue.domain or "—" }} {% if issue.category %} / {{ issue.category }}{% endif %}</div>
+                </div>
+                <div class="col-sm-4 col-6">
+                    <div class="text-muted fw-bold text-uppercase" style="font-size:0.7rem;">Task</div>
+                    <div class="font-monospace">{{ issue.task or "—" }}</div>
+                </div>
+                <div class="col-sm-4 col-6">
+                    <div class="text-muted fw-bold text-uppercase" style="font-size:0.7rem;">Worktree</div>
+                    <div class="font-monospace text-truncate" title="{{ issue.worktree or '' }}">{{ issue.worktree or "—" }}</div>
+                </div>
+                <div class="col-sm-4 col-6">
+                    <div class="text-muted fw-bold text-uppercase" style="font-size:0.7rem;">Source</div>
+                    <div>{{ issue.source or "—" }}</div>
+                </div>
+                {% if issue.refs %}
+                <div class="col-sm-12">
+                    <div class="text-muted fw-bold text-uppercase" style="font-size:0.7rem;">References</div>
+                    <div class="font-monospace small">{{ issue.refs }}</div>
+                </div>
+                {% endif %}
+                {% if issue.related_to %}
+                <div class="col-sm-6">
+                    <div class="text-muted fw-bold text-uppercase" style="font-size:0.7rem;">Related To</div>
+                    <div class="font-monospace"><a href="/issues/{{ issue.related_to }}" class="text-dark">{{ issue.related_to }}</a></div>
+                </div>
+                {% endif %}
+                <div class="col-sm-6">
+                    <div class="text-muted fw-bold text-uppercase" style="font-size:0.7rem;">Created</div>
+                    <div class="font-monospace" style="font-size:0.8rem;">{{ issue.created_at[:16].replace('T', ' ') if issue.created_at else "—" }} UTC</div>
+                </div>
+                <div class="col-sm-6">
+                    <div class="text-muted fw-bold text-uppercase" style="font-size:0.7rem;">Last Updated</div>
+                    <div class="font-monospace" style="font-size:0.8rem;">{{ issue.updated_at[:16].replace('T', ' ') if issue.updated_at else "—" }} UTC</div>
+                </div>
+            </div>
+
+            {% if issue.tags %}
+            <div class="mb-3 d-flex flex-wrap gap-1">
+                {% for t in issue.tags %}
+                <span class="badge bg-light text-secondary border px-2 py-1" style="font-size:0.7rem;">{{ t }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
             
             <hr class="my-3">
             
@@ -191,6 +271,10 @@
                     <input type="text" class="form-control form-control-sm" id="worktree" name="worktree" value="{{ issue.worktree or '' }}">
                 </div>
                 <div class="mb-3">
+                    <label for="task" class="form-label small fw-bold text-muted">Task ID</label>
+                    <input type="text" class="form-control form-control-sm font-monospace" id="task" name="task" value="{{ issue.task or '' }}" placeholder="task-123">
+                </div>
+                <div class="mb-3">
                     <label for="status_val" class="form-label small fw-bold">Status</label>
                     <select class="form-select form-select-sm" id="status_val" name="status_val">
                         {% for s in statuses %}
@@ -281,12 +365,24 @@
                     <input type="text" class="form-control form-control-sm font-monospace" id="aka" name="aka" value="{{ issue.aka or '' }}">
                 </div>
                 <div class="mb-3">
+                    <label for="related_to" class="form-label small fw-bold text-muted">Related To (Issue ID)</label>
+                    <input type="text" class="form-control form-control-sm font-monospace" id="related_to" name="related_to" value="{{ issue.related_to or '' }}" placeholder="Bug-XXXX">
+                </div>
+                <div class="mb-3">
                     <label for="tags_raw" class="form-label small fw-bold text-muted">Tags (Comma-separated)</label>
                     <input type="text" class="form-control form-control-sm" id="tags_raw" name="tags_raw" value="{{ issue.tags|join(', ') }}">
                 </div>
                 <div class="mb-3">
                     <label for="recommended_next_step" class="form-label small fw-bold text-muted">Recommended Next Step / Remediation Plan</label>
                     <textarea class="form-control form-control-sm font-monospace" id="recommended_next_step" name="recommended_next_step" rows="4">{{ issue.recommended_next_step or '' }}</textarea>
+                </div>
+                <div class="mb-3">
+                    <label for="created_at" class="form-label small fw-bold text-muted">Created Date (UTC)</label>
+                    <input type="datetime-local" class="form-control form-control-sm" id="created_at" name="created_at" value="{{ issue.created_at[:16] if issue.created_at else '' }}">
+                </div>
+                <div class="mb-3">
+                    <label for="updated_at" class="form-label small fw-bold text-muted">Updated Date (UTC)</label>
+                    <input type="datetime-local" class="form-control form-control-sm" id="updated_at" name="updated_at" value="{{ issue.updated_at[:16] if issue.updated_at else '' }}">
                 </div>
 
                 <button type="submit" class="btn btn-dark btn-sm w-100 py-2 mt-2 text-uppercase fw-bold"><i class="fa-solid fa-save me-1"></i> Save Changes</button>
