@@ -71,3 +71,28 @@ The detail view renders Markdown descriptions, supports description appending wi
 
 ### Lookup Vocabularies
 Administrators can inspect lookup vocabularies (Statuses, Severities, Priorities, Efforts, Domains, Categories, and Retirement Reasons) and configure the global ID template under the Configuration section.
+
+---
+
+## 3. Terminal Shell Wrapper Scripts (`scripts/`)
+
+To streamline administrative and operational tasks without requiring raw Python commands or manual JSON curls, a suite of lightweight, dependency-free Bash wrapper scripts is provided inside the `scripts/` directory.
+
+### Centralized Configuration File (`scripts/config.sh`)
+All wrapper scripts source a central configuration file `scripts/config.sh` to load default parameters, URLs, security tokens, and context settings:
+- **Environment Integration:** It automatically sources your local private `.env` file from the project root as the highest priority context.
+- **Connection Configuration:** Defines default API connection properties:
+  - `ISSUE_HUB_URL="https://tessallite-issue-hub-633649663813.us-west1.run.app"`
+  - `ISSUE_HUB_TOKEN="tessallite_api_secure_token_abc123_xyz789"`
+- **Context Defaults:** Defines default project context fields if omitted by commands:
+  - `ISSUE_HUB_DEFAULT_PROJECT="tessallite"`
+  - `ISSUE_HUB_DEFAULT_REPOSITORY="tessallite-workspace"`
+  - `ISSUE_HUB_DEFAULT_BRANCH="main"`
+
+### Operational Wrapper Scripts
+- **`./scripts/run_migration.sh`:** Sourced config values, validates that the `migration_sources/` active and closed registries are ready, and executes the production-scale database migration cleanly and securely inside an empty database transaction block.
+- **`./scripts/create_issue.sh`:** Takes standard CLI parameters (`--title`, `--severity`, `--description`, and optional overrides like `--project`, `--repository`, `--branch`, `--area`, `--refs`) and dynamically formats and posts the JSON payload.
+- **`./scripts/reserve_issue.sh`:** Pre-allocates a sequential `Bug-N` ID immediately via the API and outputs only the cleanly allocated ID to the console.
+- **`./scripts/find_issue.sh`:** Executes case-insensitive queries by text query, exact ID/AKA (`--id`), status, or severity, and pretty-prints the JSON output.
+- **`./scripts/update_issue.sh`:** Patches metadata fields (`--status`, `--severity`, `--owner`), handles atomic tag additions/removals (`--add-tag`, `--remove-tag`), appends comments (`--append-file`), and retires issues (`--retire`).
+

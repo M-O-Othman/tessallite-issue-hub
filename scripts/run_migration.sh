@@ -7,10 +7,8 @@
 # ==============================================================================
 set -e
 
-# Load local .env if present
-if [ -f .env ]; then
-    export $(grep -v '^#' .env | xargs)
-fi
+# Source central shell configuration file (scripts/config.sh)
+source "$(dirname "$0")/config.sh"
 
 DB_URL="${1:-$DATABASE_URL}"
 

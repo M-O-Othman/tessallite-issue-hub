@@ -11,14 +11,12 @@
 # ==============================================================================
 set -e
 
-# Load local .env if present
-if [ -f .env ]; then
-    export $(grep -v '^#' .env | xargs)
-fi
+# Source central shell configuration file (scripts/config.sh)
+source "$(dirname "$0")/config.sh"
 
-# Fallback defaults
-URL="${ISSUE_HUB_URL:-https://tessallite-issue-hub-633649663813.us-west1.run.app}"
-TOKEN="${ISSUE_HUB_TOKEN:-tessallite_api_secure_token_abc123_xyz789}"
+# Load config values
+URL="${ISSUE_HUB_URL}"
+TOKEN="${ISSUE_HUB_TOKEN}"
 
 usage() {
     echo "Tessallite ID Reserver"
@@ -47,6 +45,11 @@ while [ "$#" -gt 0 ]; do
         *) echo "Error: Unknown argument '$1'."; usage ;;
     esac
 done
+
+# Apply default values from config if omitted (Gate 6)
+PROJECT="${PROJECT:-$ISSUE_HUB_DEFAULT_PROJECT}"
+REPO="${REPO:-$ISSUE_HUB_DEFAULT_REPOSITORY}"
+BRANCH="${BRANCH:-$ISSUE_HUB_DEFAULT_BRANCH}"
 
 # Construct JSON payload dynamically
 PAYLOAD=$(python3 -c "
