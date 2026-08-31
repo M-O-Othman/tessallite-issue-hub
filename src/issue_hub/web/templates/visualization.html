@@ -161,6 +161,26 @@
             <div id="progress-chart" class="chart-container"></div>
         </div>
 
+        <!-- Interactive Multi-Dimensional Treemap (Gate 2) -->
+        <div class="analytics-card p-4 mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-square-poll-horizontal me-2 text-primary"></i>Multi-Dimensional Treemap Analysis</h5>
+                <div class="d-flex align-items-center gap-2">
+                    <label for="treemap-dimension" class="small fw-bold text-muted mb-0"><i class="fa-solid fa-diagram-project me-1"></i> Segment By:</label>
+                    <select class="form-select form-select-sm border-dark-subtle fw-bold" id="treemap-dimension" style="width: 150px; border-radius: 8px;" onchange="updateTreemap()">
+                        <option value="project">Project</option>
+                        <option value="domain">Domain</option>
+                        <option value="category">Category</option>
+                        <option value="repository">Repository</option>
+                        <option value="status">Status</option>
+                        <option value="owner">Owner</option>
+                    </select>
+                </div>
+            </div>
+            <p class="text-muted small mb-3">Tiles represent metadata segments. **Area/Size** is proportional to the **Issue Count**, and nested tile **Colors** represent the **Severity** breakdown (Red: Critical, Orange: High, Yellow: Medium, Green: Low, Grey: Unverified).</p>
+            <div id="treemap-chart" class="chart-container" style="height: 450px;"></div>
+        </div>
+
         <!-- Multi-dimension Distribution Analysis -->
         <div class="row g-4">
             <div class="col-md-6">
@@ -196,6 +216,7 @@
     
     // ECharts Instances
     let progressChartInstance = null;
+    let treemapChartInstance = null;
     let distChartInstance = null;
     let projVolumeChartInstance = null;
     
@@ -206,6 +227,7 @@
     document.addEventListener("DOMContentLoaded", function() {
         // Initialize ECharts instances
         progressChartInstance = echarts.init(document.getElementById("progress-chart"));
+        treemapChartInstance = echarts.init(document.getElementById("treemap-chart"));
         distChartInstance = echarts.init(document.getElementById("distribution-chart"));
         projVolumeChartInstance = echarts.init(document.getElementById("project-volume-chart"));
         
@@ -215,6 +237,7 @@
         // Handle responsive resizing
         window.addEventListener("resize", function() {
             progressChartInstance.resize();
+            if (treemapChartInstance) treemapChartInstance.resize();
             distChartInstance.resize();
             projVolumeChartInstance.resize();
         });
@@ -327,7 +350,8 @@
         // 3. Render Timescale progress and burndown
         renderProgressChart(filtered);
         
-        // 4. Render distributions
+        // 4. Render distributions and treemap
+        updateTreemap(filtered);
         updateDistributionChart(filtered);
         renderProjectVolumeChart(filtered);
     }
@@ -418,6 +442,82 @@
         };
 
         progressChartInstance.setOption(option, true);
+    }
+
+    function updateTreemap(issuesList) {
+        const issues = issuesList || getActiveFilteredIssues();
+        const dim = document.getElementById("treemap-dimension").value;
+        
+        const treemapData = [];
+        issues.forEach(i => {
+            let val = i[dim];
+            if (dim === "owner") val = i.owner || "Unassigned";
+            if (dim === "status") val = i.status || "OPEN";
+            if (!val) val = "None";
+            
+            let sev = i.severity || "UNVERIFIED";
+            sev = sev.toUpperCase();
+            
+            const key = `${val} - ${sev}`;
+            
+            let existing = treemapData.find(item => item.name === key);
+            if (existing) {
+                existing.value += 1;
+            } else {
+                treemapData.push({
+                    name: key,
+                    value: 1,
+                    severity: sev
+                });
+            }
+        });
+
+        // Beautiful branded severity colors (Gate 2 / Section 10)
+        const sevColors = {
+            "CRITICAL": "#ef4444",   // Red
+            "HIGH": "#f97316",       // Orange
+            "MEDIUM": "#eab308",     // Yellow / Gold
+            "LOW": "#22c55e",        // Green
+            "UNVERIFIED": "#94a3b8"  // Slate Grey
+        };
+
+        treemapData.forEach(item => {
+            item.itemStyle = {
+                color: sevColors[item.severity] || "#94a3b8"
+            };
+        });
+
+        const option = {
+            tooltip: {
+                formatter: function (info) {
+                    const value = info.value;
+                    const name = info.name;
+                    return [
+                        '<div class="tooltip-title fw-bold" style="font-size:13px;">' + echarts.format.encodeHTML(name) + '</div>',
+                        'Issue Count: ' + value
+                    ].join('');
+                }
+            },
+            series: [
+                {
+                    name: 'Issues Breakdown',
+                    type: 'treemap',
+                    visibleMin: 10,
+                    label: {
+                        show: true,
+                        formatter: '{b}: {c}'
+                    },
+                    itemStyle: {
+                        borderColor: '#fff',
+                        borderWidth: 2,
+                        gapWidth: 4
+                    },
+                    data: treemapData
+                }
+            ]
+        };
+
+        treemapChartInstance.setOption(option, true);
     }
 
     function updateDistributionChart(issuesList) {
