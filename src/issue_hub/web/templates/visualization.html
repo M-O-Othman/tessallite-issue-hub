@@ -366,17 +366,20 @@
     }
 
     function renderProgressChart(issues) {
-        // Collect dates and sort them
+        // Collect dates and sort them (Gate 2 / Defensive Timestamp parsing)
         const datesMap = {};
         issues.forEach(i => {
-            const dateStr = i.created_at.slice(0, 10);
+            const dateStr = (i.created_at || "").slice(0, 10);
+            if (!dateStr) return;
             if (!datesMap[dateStr]) datesMap[dateStr] = { opened: 0, closed: 0 };
             datesMap[dateStr].opened += 1;
             
-            if (["FIXED", "CLOSED", "VERIFIED", "DONE", "RESOLVED"].includes(i.status)) {
-                const uDateStr = i.updated_at.slice(0, 10);
-                if (!datesMap[uDateStr]) datesMap[uDateStr] = { opened: 0, closed: 0 };
-                datesMap[uDateStr].closed += 1;
+            if (terminalStatuses.includes((i.status || "").toUpperCase())) {
+                const uDateStr = (i.updated_at || "").slice(0, 10);
+                if (uDateStr) {
+                    if (!datesMap[uDateStr]) datesMap[uDateStr] = { opened: 0, closed: 0 };
+                    datesMap[uDateStr].closed += 1;
+                }
             }
         });
 
