@@ -27,7 +27,7 @@ services:
       - ISSUE_HUB_ENV=development
       - ISSUE_HUB_API_TOKEN=api_bearer_token_123
       - ISSUE_HUB_WEB_USERNAME=admin
-      - ISSUE_HUB_WEB_PASSWORD_HASH=$$2b$$12$$aFi5o69Jva.w9qOPi952mOsdCA3kSt7QprLhhicsNJTBrQSdEaa8O # bcrypt hash of 'admin'
+      - ISSUE_HUB_WEB_PASSWORD_HASH=$$2b$$12$$NI1nVKBiPNUw2ld6d8mQFutz5GXVgtmh6C.OwUm9fbG..qCXhyrka # bcrypt hash of 'tessallite'
       - ISSUE_HUB_SESSION_SECRET=super_secret_session_key_9999
       - ISSUE_HUB_DEFAULT_PROJECT=tessallite
       - ISSUE_HUB_DEFAULT_REPOSITORY=tessallite-workspace
