@@ -82,8 +82,8 @@ To streamline administrative and operational tasks without requiring raw Python 
 All wrapper scripts source a central configuration file `scripts/config.sh` to load default parameters, URLs, security tokens, and context settings:
 - **Environment Integration:** It automatically sources your local private `.env` file from the project root as the highest priority context.
 - **Connection Configuration:** Defines default API connection properties:
-  - `ISSUE_HUB_URL="https://tessallite-issue-hub-633649663813.us-west1.run.app"`
-  - `ISSUE_HUB_TOKEN="tessallite_api_secure_token_abc123_xyz789"`
+  - `ISSUE_HUB_URL="https://hub.yourdomain.com"`
+  - `ISSUE_HUB_TOKEN="<your_api_bearer_token>"`
 - **Context Defaults:** Defines default project context fields if omitted by commands:
   - `ISSUE_HUB_DEFAULT_PROJECT="tessallite"`
   - `ISSUE_HUB_DEFAULT_REPOSITORY="tessallite-workspace"`

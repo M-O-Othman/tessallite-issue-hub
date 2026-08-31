@@ -207,12 +207,21 @@
         </div>
     </div>
 </div>
+
+<!-- Passive JSON data container to prevent XSS script-injection (Gate 2 / SEC-002) -->
+<script type="application/json" id="issues-data">
+  {{ issues_json|safe }}
+</script>
+<script type="application/json" id="terminal-statuses-data">
+  {{ terminal_statuses_json|safe }}
+</script>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    // Raw Issues Dataset parsed from Backend
-    const rawIssues = {{ issues_json|safe }};
+    // Parse raw issues dataset securely from the passive text block (Gate 2 / SEC-002)
+    const rawIssues = JSON.parse(document.getElementById("issues-data").textContent);
+    const terminalStatuses = JSON.parse(document.getElementById("terminal-statuses-data").textContent).map(s => s.toUpperCase());
     
     // ECharts Instances
     let progressChartInstance = null;
@@ -336,10 +345,10 @@
             return true;
         });
 
-        // 2. Recalculate KPIs
+        // 2. Recalculate KPIs (Gate 3 / ANL-001)
         const total = filtered.length;
-        const open = filtered.filter(i => ["OPEN", "UNVERIFIED", "REOPENED"].includes(i.status) && !i.is_retired).length;
-        const closed = filtered.filter(i => ["FIXED", "CLOSED", "VERIFIED", "DONE", "RESOLVED"].includes(i.status) && !i.is_retired).length;
+        const open = filtered.filter(i => !terminalStatuses.includes((i.status || "").toUpperCase()) && !i.is_retired).length;
+        const closed = filtered.filter(i => terminalStatuses.includes((i.status || "").toUpperCase()) && !i.is_retired).length;
         const rate = total > 0 ? Math.round((closed / total) * 100) : 0;
         
         document.getElementById("kpi-total").innerText = total;
@@ -491,9 +500,10 @@
             tooltip: {
                 formatter: function (info) {
                     const value = info.value;
-                    const name = info.name;
+                    const name = info.name || '';
+                    const cleanName = name.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
                     return [
-                        '<div class="tooltip-title fw-bold" style="font-size:13px;">' + echarts.format.encodeHTML(name) + '</div>',
+                        '<div class="tooltip-title fw-bold" style="font-size:13px;">' + cleanName + '</div>',
                         'Issue Count: ' + value
                     ].join('');
                 }

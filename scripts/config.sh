@@ -13,10 +13,20 @@ if [ -f "$ROOT_ENV" ]; then
     export $(grep -v '^#' "$ROOT_ENV" | xargs)
 fi
 
-# 2. API Server Connection Configuration
-# Fallback to the secure production URL and token if not overridden by your environment/.env
-ISSUE_HUB_URL="${ISSUE_HUB_URL:-https://tessallite-issue-hub-633649663813.us-west1.run.app}"
-ISSUE_HUB_TOKEN="${ISSUE_HUB_TOKEN:-tessallite_api_secure_token_abc123_xyz789}"
+# 2. Strict Fail-Closed API Server Connection Configuration (Gate 2 / SEC-001)
+# Production URLs and secure tokens are strictly forbidden to be committed to Git.
+# Sourcing scripts will instantly fail-closed if URL or Token is missing.
+if [ -z "$ISSUE_HUB_URL" ]; then
+    echo "CRITICAL SECURITY ERROR: ISSUE_HUB_URL environment variable is not defined."
+    echo "Please set ISSUE_HUB_URL in your environment or local .env file."
+    exit 1
+fi
+
+if [ -z "$ISSUE_HUB_TOKEN" ]; then
+    echo "CRITICAL SECURITY ERROR: ISSUE_HUB_TOKEN environment variable is not defined."
+    echo "Please set ISSUE_HUB_TOKEN in your environment or local .env file."
+    exit 1
+fi
 
 # 3. Default Issue Context Parameters
 ISSUE_HUB_DEFAULT_PROJECT="${ISSUE_HUB_DEFAULT_PROJECT:-tessallite}"

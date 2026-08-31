@@ -711,6 +711,15 @@ def get_visualization(request: Request, db: Session = Depends(get_db)):
     all_issues = db.query(Issue).all()
     issues_json = json.dumps([i.to_dict() for i in all_issues], default=str)
     
+    # Query terminal statuses for database-driven metrics calculations (Gate 3 / ANL-001)
+    terminal_statuses = [
+        val for val, in db.query(LookupValue.value).filter(
+            LookupValue.lookup_type == "STATUS", 
+            LookupValue.is_terminal.is_(True)
+        ).all()
+    ]
+    terminal_statuses_json = json.dumps(terminal_statuses)
+    
     # Query lookups for filtering lists
     projects = db.query(LookupValue.value, LookupValue.label).filter(LookupValue.lookup_type == "PROJECT", LookupValue.is_active.is_(True)).all()
     repositories = db.query(LookupValue.value, LookupValue.label).filter(LookupValue.lookup_type == "REPOSITORY", LookupValue.is_active.is_(True)).all()
@@ -724,6 +733,7 @@ def get_visualization(request: Request, db: Session = Depends(get_db)):
         "visualization.html",
         {
             "issues_json": issues_json,
+            "terminal_statuses_json": terminal_statuses_json,
             "projects": projects,
             "repositories": repositories,
             "statuses": statuses,
