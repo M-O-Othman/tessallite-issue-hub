@@ -1,48 +1,58 @@
-# Tessallite Issue Hub — Action Plan (Phase 4)
+# Tessallite Issue Hub — Action Plan (Comprehensive Fixes & Enhancements)
 
 ## Status: Completed
 
 ---
 
-## Phase 4: Advanced Search, Filtering, and Site-Wide UX
-
 ### Objectives
-1. [x] **Closed Date Range to Filter**: Support filtering issues by `retired_at` date ranges (`closed_after` and `closed_before`).
-2. [x] **Enhanced Filter Block Design**: Modernize and redesign the filter block in `list.html` to be cleaner, collapsible, and beautifully organized into logic columns (e.g., Core Dimensions, Dates, Meta Attributes).
-3. [x] **Site-wide Global Project Selector**:
-   - Add a project selector to the top navbar in `base.html`.
-   - Implement a backend endpoint (`/set-project`) that sets a cookie `global_project` with the selected project.
-   - Filter all pages (Dashboard/Visualization, Issues List, Create Form) to default to or restrict by this selected project.
-4. [x] **All Meta Fields in Filter**: Add Domain, Category, Area, Classification, Priority, Owner, Task, Worktree, and Expected Effort to the filter panel.
-5. [x] **Multi-Select Filters**: Use custom, modern, lightweight Bootstrap checkbox dropdown menus for `status`, `severity`, `priority`, `domain`, `category`, `project`, and `repository` to allow filtering by multiple values at once (using SQL `IN` operator on the backend).
+1. [x] Fix active defects (`datetime` import in web routes, CLI test harness server coupling).
+2. [x] Add performance database indexes (GIN on `tags`, B-tree on filter and date columns).
+3. [x] Ensure strict local-only execution (do not touch GCP deployed service).
+4. [x] Establish API and CLI feature parity (multi-select dimensions, closed date boundaries).
+5. [x] Optimize query performance (eliminate N+1 query on history, batch DB readiness check).
+6. [x] Fulfill all documentation standards (mirrored chained markdown help center, known issues tracking).
+7. [x] Execute full validation pass and commit locally without pushing to remote.
 
 ---
 
-### Step-by-Step Implementation Strategy
+### Phase 1: Local Environment & Safety Configuration
+- [x] Update `.env` to point to local Docker PostgreSQL instance (`localhost:5432`) to ensure GCP VM (`34.82.232.232`) is never touched.
+- [x] Create `.env.example` documenting all configuration keys with safe development defaults.
 
-#### 1. Backend Search Logic (`src/issue_hub/search.py`)
-- [x] Update `query_issues` signature to allow `List[str]` (or `Optional[List[str]]`) for: `project`, `repository`, `status`, `severity`, `priority`, `domain`, `category`.
-- [x] Update field filtering to use `column.in_(value)` if `value` is a list, falling back to `column == value` if it's a scalar string.
-- [x] Add `closed_from` and `closed_to` (`datetime`) to query `Issue.retired_at`.
+### Phase 2: Immediate Bug Fixes & Test Suite Decoupling
+- [x] Add `from datetime import datetime` in `src/issue_hub/web/routes.py` to fix runtime `NameError` on `/issues` date filtering.
+- [x] Add automated in-process test server fixture in `tests/cli/test_cli_operations.py` (spawning an ephemeral uvicorn instance on a dedicated test port) so that CLI integration tests run cleanly without external dependencies.
+- [x] Run pytest to verify immediate pass on fixed modules.
 
-#### 2. Backend Web Routes (`src/issue_hub/web/routes.py`)
-- [x] Implement a route `/set-project` which accepts a `project` query parameter, sets a `global_project` cookie, and redirects back to the previous page (`Referer`).
-- [x] On `/issues` (`get_issues_list`), retrieve `global_project` from cookies. If a global project is set and no explicit `project` filter is in the request query parameters, default the `project` query parameter to the cookie value.
-- [x] Update `get_issues_list` signature to receive lists of strings for multi-select fields (FastAPI `Query(None)`).
-- [x] Parse `closed_after` and `closed_before` form/query parameters into `datetime` objects and pass them to `query_issues`.
-- [x] Inject `global_project_cookie` into template responses so that the UI can highlight/select the correct active global project.
+### Phase 3: Database Indexing Optimization
+- [x] Generate a new Alembic migration to add performance indexes:
+  - GIN index on `issues.tags` (JSONB) for fast containment queries (`tags @> '["..."]'`).
+  - B-tree indexes on `issues.severity`, `issues.priority`, `issues.domain`, `issues.category`, `issues.owner`, `issues.aka`, `issues.created_at`, `issues.retired_at`.
+- [x] Apply Alembic migration locally to `issue_hub` and `issue_hub_test`.
 
-#### 3. Base Layout & Site-Wide Project Selector (`src/issue_hub/web/templates/base.html`)
-- [x] Display a modern site-wide "Project Context" dropdown in the navbar.
-- [x] List all active projects in this dropdown (fetched from database lookup values or context).
-- [x] Clicking a project makes a GET request to `/set-project?project=PROJECT_VALUE` to update the active context.
+### Phase 4: API, CLI, and Search Parity & Query Optimization
+- [x] Update `GET /api/v1/issues` in `src/issue_hub/api/issues.py`:
+  - Add `closed_from` and `closed_to` query parameters.
+  - Support multi-value list queries (`Query(None)`) for `status`, `severity`, `priority`, `project`, `repository`, `domain`, `category`.
+  - Eliminate N+1 query on `include_history=True` by batch-fetching history records in a single query.
+- [x] Update CLI client in `src/issue_cli/main.py`:
+  - Add `--domain`, `--category`, `--priority`, `--effort`, `--tag`, `--owner`, `--area`, `--closed-after`, `--closed-before` to `issue find`.
+  - Add `--priority`, `--expected-effort`, `--tags`, `--refs`, `--owner`, `--branch`, `--worktree` to `issue create`.
+- [x] Sanitize wildcard characters in search queries in `src/issue_hub/search.py`.
+- [x] Consolidate table check in `src/issue_hub/database.py:check_db_connection` into a single SQL query.
 
-#### 4. Web UI List & Filters (`src/issue_hub/web/templates/list.html`)
-- [x] Completely redesign the filter block into an elegant, collapsible panel.
-- [x] Style multi-selects as custom Bootstrap dropdown buttons that display checkable lists of options.
-- [x] Add standard single inputs/date fields for Area, Classification, Task, Worktree, and the new Closed Date Range.
-- [x] Provide clear "Reset Filters" and "Apply Filters" buttons.
+### Phase 5: Documentation & Standards Compliance
+- [x] Create mirrored markdown help files in `docs/help/`:
+  - `home.md`, `apis.md`, `cli.md`, `frontend.md`, `migration.md`, `deployment.md`
+  - Ensure all pages are logically chained with `(Previous) | (Home) | (Next)` links.
+- [x] Remove emojis from `deploy.sh`.
+- [x] Update `docs/Compatibility-Matrix.md` to reflect full CLI/API parity.
+- [x] Update `Docs/known_issues.md` to document resolved issues.
+- [x] Update `README.md` and `Docs/user-guide.md` to describe new CLI flags, API parameters, and indexes.
 
-#### 5. Verification & Testing
-- [x] Write test cases for multi-select, date filtering, and global project context to ensure complete correctness.
-- [x] Run ruff to keep the code perfectly clean.
+### Phase 6: Validation, Code Review & Local Commit
+- [x] Run `ruff check .` and fix any static analysis warnings.
+- [x] Run full test suite `pytest` across all test modules (unit, migration, web, integration, concurrency, cli).
+- [x] Verify 100% tests pass.
+- [x] Commit locally with corporate format `[scope] summary`.
+- [x] Do not push to remote.

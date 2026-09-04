@@ -62,12 +62,18 @@ def parse_args():
     create_parser = subparsers.add_parser("create", help="Create a complete issue or reserve a number")
     create_parser.add_argument("--reserve", action="store_true", help="Reserve a sequence number without detail fields")
     create_parser.add_argument("--severity", help="Severity level (CRITICAL, HIGH, etc.)")
+    create_parser.add_argument("--priority", help="Priority level (P0, P1, P2, etc.)")
+    create_parser.add_argument("--expected-effort", help="Expected effort (XS, S, M, L, XL, XXL)")
     create_parser.add_argument("--title", help="Short issue title")
     create_parser.add_argument("--description", help="Complete Markdown issue description")
     create_parser.add_argument("--description-file", help="File containing Markdown description")
     create_parser.add_argument("--area", help="Issue area")
+    create_parser.add_argument("--classification", help="Classification code")
     create_parser.add_argument("--domain", help="Issue domain")
     create_parser.add_argument("--category", help="Issue category")
+    create_parser.add_argument("--refs", help="File or line references")
+    create_parser.add_argument("--owner", help="Assigned owner")
+    create_parser.add_argument("--tag", action="append", dest="tags", help="Tag to attach (repeatable)")
     create_parser.add_argument("--json", help="Path to JSON file containing complete issue body")
     create_parser.add_argument("--id", help="Supply a pre-existing reserved ID to complete or update")
 
@@ -76,6 +82,18 @@ def parse_args():
     find_parser.add_argument("query", nargs="?", help="Specific issue ID (e.g. Bug-9627) or text search phrase")
     find_parser.add_argument("--status", help="Filter by status")
     find_parser.add_argument("--severity", help="Filter by severity")
+    find_parser.add_argument("--priority", help="Filter by priority")
+    find_parser.add_argument("--expected-effort", help="Filter by expected effort")
+    find_parser.add_argument("--domain", help="Filter by domain")
+    find_parser.add_argument("--category", help="Filter by category")
+    find_parser.add_argument("--area", help="Filter by area")
+    find_parser.add_argument("--classification", help="Filter by classification")
+    find_parser.add_argument("--owner", help="Filter by owner")
+    find_parser.add_argument("--tag", help="Filter by tag")
+    find_parser.add_argument("--closed-after", help="Filter issues closed after timestamp/date")
+    find_parser.add_argument("--closed-before", help="Filter issues closed before timestamp/date")
+    find_parser.add_argument("--created-after", help="Filter issues created after timestamp/date")
+    find_parser.add_argument("--created-before", help="Filter issues created before timestamp/date")
     find_parser.add_argument("--repository", help="Filter by repository")
     find_parser.add_argument("--project", help="Filter by project")
     find_parser.add_argument("--is-retired", help="Filter by retired state (true/false)")
@@ -136,11 +154,17 @@ def handle_create(args, config: Dict[str, Any]) -> Dict[str, Any]:
             "reserve": args.reserve,
             "id": args.id,
             "severity": args.severity,
+            "priority": getattr(args, "priority", None),
+            "expected_effort": getattr(args, "expected_effort", None) or "UNKNOWN",
             "title": args.title,
             "description": desc,
             "area": args.area,
+            "classification": getattr(args, "classification", None),
             "domain": args.domain,
             "category": args.category,
+            "refs": getattr(args, "refs", None),
+            "owner": getattr(args, "owner", None),
+            "tags": getattr(args, "tags", None) or [],
         }
         
     # Merge resolved config (project, repository, branch, worktree) - Gate 6 / Section 11
@@ -161,6 +185,18 @@ def handle_find(args, config: Dict[str, Any]) -> Dict[str, Any]:
     params = {
         "status": args.status,
         "severity": args.severity,
+        "priority": getattr(args, "priority", None),
+        "expected_effort": getattr(args, "expected_effort", None),
+        "domain": getattr(args, "domain", None),
+        "category": getattr(args, "category", None),
+        "area": getattr(args, "area", None),
+        "classification": getattr(args, "classification", None),
+        "owner": getattr(args, "owner", None),
+        "tag": getattr(args, "tag", None),
+        "closed_from": getattr(args, "closed_after", None),
+        "closed_to": getattr(args, "closed_before", None),
+        "created_from": getattr(args, "created_after", None),
+        "created_to": getattr(args, "created_before", None),
         "repository": args.repository or (config["repository"] if args.query is None else None),
         "project": args.project or (config["project"] if args.query is None else None),
         "is_retired": args.is_retired.lower() in ("true", "1", "yes") if args.is_retired else None,

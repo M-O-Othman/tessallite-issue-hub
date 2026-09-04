@@ -11,6 +11,7 @@ import secrets
 from html.parser import HTMLParser
 from typing import Optional, List
 from pathlib import Path
+from datetime import datetime
 
 from issue_hub.database import get_db
 from issue_hub.config import settings
@@ -249,35 +250,25 @@ def get_issues_list(
     worktree_norm = worktree.strip() if worktree and worktree.strip() else None
     tag_norm = tag.strip() if tag and tag.strip() else None
     
-    # Parse date range boundaries into datetimes (Gate 2)
-    from datetime import datetime
-    created_after_dt: Optional[datetime] = None
-    if created_after and created_after.strip():
-        try:
-            created_after_dt = datetime.strptime(created_after.strip(), "%Y-%m-%d")
-        except ValueError:
-            pass
-            
-    created_before_dt: Optional[datetime] = None
-    if created_before and created_before.strip():
-        try:
-            created_before_dt = datetime.strptime(created_before.strip() + " 23:59:59", "%Y-%m-%d %H:%M:%S")
-        except ValueError:
-            pass
+    # Helper to parse dates in multiple formats, prioritizing DD-MM-YYYY (Gate 2)
+    def parse_user_date(date_str: Optional[str], end_of_day: bool = False) -> Optional[datetime]:
+        if not date_str or not date_str.strip():
+            return None
+        cleaned = date_str.strip()
+        for fmt in ("%d-%m-%Y", "%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d"):
+            try:
+                dt = datetime.strptime(cleaned, fmt)
+                if end_of_day:
+                    return dt.replace(hour=23, minute=59, second=59)
+                return dt
+            except ValueError:
+                continue
+        return None
 
-    closed_after_dt: Optional[datetime] = None
-    if closed_after and closed_after.strip():
-        try:
-            closed_after_dt = datetime.strptime(closed_after.strip(), "%Y-%m-%d")
-        except ValueError:
-            pass
-            
-    closed_before_dt: Optional[datetime] = None
-    if closed_before and closed_before.strip():
-        try:
-            closed_before_dt = datetime.strptime(closed_before.strip() + " 23:59:59", "%Y-%m-%d %H:%M:%S")
-        except ValueError:
-            pass
+    created_after_dt = parse_user_date(created_after, end_of_day=False)
+    created_before_dt = parse_user_date(created_before, end_of_day=True)
+    closed_after_dt = parse_user_date(closed_after, end_of_day=False)
+    closed_before_dt = parse_user_date(closed_before, end_of_day=True)
 
     # Safe boolean parsing of parameters
     is_retired_bool: Optional[bool] = None
@@ -375,10 +366,10 @@ def get_issues_list(
             "tag_filter": tag_norm or "",
             "is_retired_filter": is_retired_bool,
             "is_terminal_filter": is_terminal_bool,
-            "created_after_filter": created_after or "",
-            "created_before_filter": created_before or "",
-            "closed_after_filter": closed_after or "",
-            "closed_before_filter": closed_before or "",
+            "created_after_filter": created_after_dt.strftime("%d-%m-%Y") if created_after_dt else "",
+            "created_before_filter": created_before_dt.strftime("%d-%m-%Y") if created_before_dt else "",
+            "closed_after_filter": closed_after_dt.strftime("%d-%m-%Y") if closed_after_dt else "",
+            "closed_before_filter": closed_before_dt.strftime("%d-%m-%Y") if closed_before_dt else "",
             "projects": projects,
             "repositories": repositories,
             "statuses": statuses,

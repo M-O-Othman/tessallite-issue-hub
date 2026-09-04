@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from typing import Optional
+from typing import Optional, List, Union
+from collections import defaultdict
 from datetime import datetime
 
 from issue_hub.database import get_db
@@ -49,18 +50,18 @@ def api_create_issue(
 def api_list_issues(
     id: Optional[str] = Query(None, description="Exact issue ID(s) (comma-separated)"),
     q: Optional[str] = Query(None, description="Text search query"),
-    project: Optional[str] = Query(None),
-    repository: Optional[str] = Query(None),
+    project: Optional[List[str]] = Query(None),
+    repository: Optional[List[str]] = Query(None),
     branch: Optional[str] = Query(None),
     worktree: Optional[str] = Query(None),
     task: Optional[str] = Query(None),
-    status: Optional[str] = Query(None),
-    severity: Optional[str] = Query(None),
-    priority: Optional[str] = Query(None),
-    expected_effort: Optional[str] = Query(None),
+    status: Optional[List[str]] = Query(None),
+    severity: Optional[List[str]] = Query(None),
+    priority: Optional[List[str]] = Query(None),
+    expected_effort: Optional[List[str]] = Query(None),
     area: Optional[str] = Query(None),
-    domain: Optional[str] = Query(None),
-    category: Optional[str] = Query(None),
+    domain: Optional[List[str]] = Query(None),
+    category: Optional[List[str]] = Query(None),
     classification: Optional[str] = Query(None),
     owner: Optional[str] = Query(None),
     tag: Optional[str] = Query(None, description="Filter by a specific tag"),
@@ -70,6 +71,8 @@ def api_list_issues(
     created_to: Optional[datetime] = Query(None),
     updated_from: Optional[datetime] = Query(None),
     updated_to: Optional[datetime] = Query(None),
+    closed_from: Optional[datetime] = Query(None),
+    closed_to: Optional[datetime] = Query(None),
     include_history: Optional[bool] = Query(None),
     limit: Optional[int] = Query(None, ge=1, le=1000),
     offset: int = Query(0, ge=0),
@@ -83,20 +86,35 @@ def api_list_issues(
     def norm(v: Optional[str]) -> Optional[str]:
         return v.strip() if v and v.strip() else None
 
+    def norm_list(v: Optional[Union[str, List[str]]]) -> Optional[Union[str, List[str]]]:
+        if not v:
+            return None
+        if isinstance(v, str):
+            parts = [p.strip() for p in v.split(",") if p.strip()]
+            return parts if len(parts) > 1 else (parts[0] if parts else None)
+        flattened = []
+        for item in v:
+            if item:
+                for sub in item.split(","):
+                    sub_clean = sub.strip()
+                    if sub_clean:
+                        flattened.append(sub_clean)
+        return flattened if flattened else None
+
     id_norm = norm(id)
     q_norm = norm(q)
-    project_norm = norm(project)
-    repository_norm = norm(repository)
+    project_norm = norm_list(project)
+    repository_norm = norm_list(repository)
     branch_norm = norm(branch)
     worktree_norm = norm(worktree)
     task_norm = norm(task)
-    status_norm = norm(status)
-    severity_norm = norm(severity)
-    priority_norm = norm(priority)
-    expected_effort_norm = norm(expected_effort)
+    status_norm = norm_list(status)
+    severity_norm = norm_list(severity)
+    priority_norm = norm_list(priority)
+    expected_effort_norm = norm_list(expected_effort)
     area_norm = norm(area)
-    domain_norm = norm(domain)
-    category_norm = norm(category)
+    domain_norm = norm_list(domain)
+    category_norm = norm_list(category)
     classification_norm = norm(classification)
     owner_norm = norm(owner)
     tag_norm = norm(tag)
@@ -139,6 +157,8 @@ def api_list_issues(
         created_to=created_to,
         updated_from=updated_from,
         updated_to=updated_to,
+        closed_from=closed_from,
+        closed_to=closed_to,
         limit=limit,
         offset=offset,
         sort=sort,
@@ -148,14 +168,25 @@ def api_list_issues(
     db_limit = get_hub_setting(db, "search_default_limit", 100)
     resolved_limit = limit if limit is not None else db_limit
 
-    # Process inline history if requested (Gate 3 / Section 9)
+    # Process inline history in a single batch query if requested (eliminating N+1 queries)
     res_items = []
-    for item in items:
-        issue_dict = item.to_dict()
-        if include_history:
-            h_recs = db.query(IssueHistory).filter(IssueHistory.issue_id == item.issue_id).order_by(IssueHistory.history_id.desc()).all()
-            issue_dict["history"] = [h.to_dict() for h in h_recs]
-        res_items.append(issue_dict)
+    if include_history and items:
+        issue_ids = [item.issue_id for item in items]
+        histories = db.query(IssueHistory).filter(
+            IssueHistory.issue_id.in_(issue_ids)
+        ).order_by(IssueHistory.history_id.desc()).all()
+
+        hist_by_id = defaultdict(list)
+        for h in histories:
+            hist_by_id[h.issue_id].append(h.to_dict())
+
+        for item in items:
+            issue_dict = item.to_dict()
+            issue_dict["history"] = hist_by_id[item.issue_id]
+            res_items.append(issue_dict)
+    else:
+        for item in items:
+            res_items.append(item.to_dict())
     
     return {
         "ok": True,

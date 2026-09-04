@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 from issue_hub.main import app
 
-client = TestClient(app, raise_server_exceptions=False)
+client = TestClient(app, raise_server_exceptions=True)
 
 def test_web_redirects_to_login_when_unauthenticated():
     """Verify that root page and other secure pages redirect to /login if unauthenticated."""

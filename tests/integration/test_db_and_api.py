@@ -264,3 +264,45 @@ def test_multi_select_and_closed_date_filtering():
     finally:
         db.close()
 
+def test_api_multi_select_and_batch_history():
+    """Verify GET /api/v1/issues supports multi-value parameters and batch history loading."""
+    # 1. Create two test issues
+    r1 = client.post("/api/v1/issues", json={
+        "severity": "CRITICAL",
+        "title": "Batch Issue 1",
+        "description": "Testing batch history and multi-select filters.",
+        "domain": "gateway",
+        "category": "product"
+    }, headers=headers)
+    assert r1.status_code == 200
+    id1 = r1.json()["issue"]["issue_id"]
+
+    r2 = client.post("/api/v1/issues", json={
+        "severity": "LOW",
+        "title": "Batch Issue 2",
+        "description": "Testing batch history with 100% precision.",
+        "domain": "scheduler",
+        "category": "ci"
+    }, headers=headers)
+    assert r2.status_code == 200
+    id2 = r2.json()["issue"]["issue_id"]
+
+    # 2. Query with multi-select domain
+    resp = client.get("/api/v1/issues?domain=gateway&domain=scheduler&include_history=true", headers=headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["ok"] is True
+    found_ids = [item["issue_id"] for item in data["items"]]
+    assert id1 in found_ids
+    assert id2 in found_ids
+
+    # Verify history is populated
+    item1 = next(item for item in data["items"] if item["issue_id"] == id1)
+    assert "history" in item1
+    assert len(item1["history"]) >= 1
+
+    # 3. Test text search with wildcard characters
+    resp_wildcard = client.get("/api/v1/issues?q=100%", headers=headers)
+    assert resp_wildcard.status_code == 200
+    assert any(item["issue_id"] == id2 for item in resp_wildcard.json()["items"])
+

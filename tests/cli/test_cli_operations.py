@@ -1,16 +1,30 @@
 import subprocess
 import json
 import os
+import socket
+import threading
+import time
 import pytest
+import uvicorn
+from issue_hub.main import app
 from issue_hub.config import settings
 
 # Setup environment variables for CLI execution
 env = os.environ.copy()
-env["ISSUE_HUB_URL"] = "http://localhost:8080"
 env["ISSUE_HUB_TOKEN"] = settings.api_token
 
+def _get_free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(('127.0.0.1', 0))
+        return s.getsockname()[1]
+
+class _TestServer(uvicorn.Server):
+    def install_signal_handlers(self):
+        pass
+
 @pytest.fixture(autouse=True, scope="module")
-def setup_cli_test_database():
+def setup_cli_test_environment():
+    # 1. Reset database tables and sequence
     from issue_hub.database import SessionLocal
     from sqlalchemy import text
     db = SessionLocal()
@@ -23,6 +37,24 @@ def setup_cli_test_database():
         raise e
     finally:
         db.close()
+
+    # 2. Start an isolated in-process uvicorn test server on an ephemeral port
+    port = _get_free_port()
+    env["ISSUE_HUB_URL"] = f"http://127.0.0.1:{port}"
+    config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
+    server = _TestServer(config=config)
+    server_thread = threading.Thread(target=server.run, daemon=True)
+    server_thread.start()
+
+    for _ in range(100):
+        if server.started:
+            break
+        time.sleep(0.05)
+
+    yield
+
+    server.should_exit = True
+    server_thread.join(timeout=3)
 
 def test_cli_create_reserve():
     """Verify issue create --reserve allocates a sequence number and returns JSON."""
@@ -178,4 +210,43 @@ def test_cli_update_description_and_tags():
     assert data_remove["ok"] is True
     assert "tag1" not in data_remove["issue"]["tags"]
     assert "tag2" in data_remove["issue"]["tags"]
+
+def test_cli_expanded_create_and_find():
+    """Verify newly added parity flags for create (--priority, --tag, --owner) and find (--tag, --domain)."""
+    # Create with new flags
+    result_create = subprocess.run([
+        "issue", "create",
+        "--severity", "MEDIUM",
+        "--priority", "P1",
+        "--expected-effort", "M",
+        "--title", "CLI Parity Issue",
+        "--description", "Verifying expanded CLI flags.",
+        "--domain", "scheduler",
+        "--category", "product",
+        "--area", "core-engine",
+        "--owner", "agent-worker-1",
+        "--tag", "perf",
+        "--tag", "v2"
+    ], capture_output=True, text=True, env=env)
+    assert result_create.returncode == 0
+    created = json.loads(result_create.stdout)
+    assert created["ok"] is True
+    issue_data = created["issue"]
+    assert issue_data["priority"] == "P1"
+    assert issue_data["expected_effort"] == "M"
+    assert issue_data["owner"] == "agent-worker-1"
+    assert "perf" in issue_data["tags"]
+    assert "v2" in issue_data["tags"]
+
+    # Find using new filter flags
+    result_find = subprocess.run([
+        "issue", "find",
+        "--domain", "scheduler",
+        "--priority", "P1",
+        "--tag", "perf"
+    ], capture_output=True, text=True, env=env)
+    assert result_find.returncode == 0
+    found = json.loads(result_find.stdout)
+    assert found["ok"] is True
+    assert any(i["issue_id"] == issue_data["issue_id"] for i in found["items"])
 

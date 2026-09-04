@@ -145,8 +145,9 @@ def query_issues(
     # Text Search q and custom scoring/ranking
     if q:
         q_clean = q.strip()
-        q_like = f"%{q_clean}%"
-        q_prefix = f"{q_clean}%"
+        escaped_q = q_clean.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        q_like = f"%{escaped_q}%"
+        q_prefix = f"{escaped_q}%"
         
         # Apply the filters across every single attribute (wide search)
         query = query.filter(

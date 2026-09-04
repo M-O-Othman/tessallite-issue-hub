@@ -32,16 +32,16 @@ def check_db_connection() -> bool:
             # 1. Connectivity check
             conn.execute(text("SELECT 1"))
             
-            # 2. Check if tables exist in the current schema
-            tables = ["alembic_version", "issues", "issue_history", "lookup_values", "hub_settings"]
-            for table in tables:
-                exists = conn.execute(text(
-                    f"SELECT EXISTS (SELECT FROM information_schema.tables "
-                    f"WHERE table_name = '{table}' AND table_schema = CURRENT_SCHEMA())"
-                )).scalar()
-                if not exists:
-                    logger.error(f"Readiness check failed: required table '{table}' does not exist.")
-                    return False
+            # 2. Check if all required tables exist in the current schema in a single query
+            required_tables = {"alembic_version", "issues", "issue_history", "lookup_values", "hub_settings"}
+            existing_tables = set(conn.execute(text(
+                "SELECT table_name FROM information_schema.tables "
+                "WHERE table_schema = CURRENT_SCHEMA() AND table_name IN ('alembic_version', 'issues', 'issue_history', 'lookup_values', 'hub_settings')"
+            )).scalars().all())
+            missing = required_tables - existing_tables
+            if missing:
+                logger.error(f"Readiness check failed: missing required table(s): {', '.join(sorted(missing))}")
+                return False
             
             # 3. Check if sequence exists
             seq_exists = conn.execute(text(

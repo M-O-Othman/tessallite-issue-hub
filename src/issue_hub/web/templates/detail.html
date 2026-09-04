@@ -124,11 +124,11 @@
                 {% endif %}
                 <div class="col-sm-6">
                     <div class="text-muted fw-bold text-uppercase" style="font-size:0.7rem;">Created</div>
-                    <div class="font-monospace" style="font-size:0.8rem;">{{ issue.created_at[:16].replace('T', ' ') if issue.created_at else "—" }} UTC</div>
+                    <div class="font-monospace" style="font-size:0.8rem;">{% if issue.created_at %}{{ issue.created_at[8:10] }}-{{ issue.created_at[5:7] }}-{{ issue.created_at[0:4] }} {{ issue.created_at[11:16] }}{% else %}—{% endif %} UTC</div>
                 </div>
                 <div class="col-sm-6">
                     <div class="text-muted fw-bold text-uppercase" style="font-size:0.7rem;">Last Updated</div>
-                    <div class="font-monospace" style="font-size:0.8rem;">{{ issue.updated_at[:16].replace('T', ' ') if issue.updated_at else "—" }} UTC</div>
+                    <div class="font-monospace" style="font-size:0.8rem;">{% if issue.updated_at %}{{ issue.updated_at[8:10] }}-{{ issue.updated_at[5:7] }}-{{ issue.updated_at[0:4] }} {{ issue.updated_at[11:16] }}{% else %}—{% endif %} UTC</div>
                 </div>
             </div>
 

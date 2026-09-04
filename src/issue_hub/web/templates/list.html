@@ -317,21 +317,21 @@
                         <div class="row g-2">
                             <div class="col-6">
                                 <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.7rem;">Created After</label>
-                                <input type="date" class="form-control form-control-sm" name="created_after" value="{{ created_after_filter or '' }}">
+                                <input type="text" class="form-control form-control-sm" name="created_after" value="{{ created_after_filter or '' }}" placeholder="DD-MM-YYYY" pattern="\d{2}-\d{2}-\d{4}">
                             </div>
                             <div class="col-6">
                                 <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.7rem;">Created Before</label>
-                                <input type="date" class="form-control form-control-sm" name="created_before" value="{{ created_before_filter or '' }}">
+                                <input type="text" class="form-control form-control-sm" name="created_before" value="{{ created_before_filter or '' }}" placeholder="DD-MM-YYYY" pattern="\d{2}-\d{2}-\d{4}">
                             </div>
                         </div>
                         <div class="row g-2 mt-2">
                             <div class="col-6">
                                 <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.7rem;">Closed After</label>
-                                <input type="date" class="form-control form-control-sm" name="closed_after" value="{{ closed_after_filter or '' }}">
+                                <input type="text" class="form-control form-control-sm" name="closed_after" value="{{ closed_after_filter or '' }}" placeholder="DD-MM-YYYY" pattern="\d{2}-\d{2}-\d{4}">
                             </div>
                             <div class="col-6">
                                 <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.7rem;">Closed Before</label>
-                                <input type="date" class="form-control form-control-sm" name="closed_before" value="{{ closed_before_filter or '' }}">
+                                <input type="text" class="form-control form-control-sm" name="closed_before" value="{{ closed_before_filter or '' }}" placeholder="DD-MM-YYYY" pattern="\d{2}-\d{2}-\d{4}">
                             </div>
                         </div>
                     </div>
@@ -440,7 +440,7 @@
                         <span class="small text-muted">{{ item.owner or "—" }}</span>
                     </td>
                     <td class="pe-4 text-end small text-muted font-monospace">
-                        {{ item.updated_at[:10] }}
+                        {{ item.updated_at[8:10] }}-{{ item.updated_at[5:7] }}-{{ item.updated_at[0:4] }}
                         <div style="font-size: 0.75rem;">{{ item.updated_at[11:16] }} UTC</div>
                     </td>
                 </tr>

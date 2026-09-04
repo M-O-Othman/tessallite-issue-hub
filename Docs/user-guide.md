@@ -19,9 +19,19 @@ The CLI resolves settings in the following order:
    - **Windows:** `%APPDATA%\Tessallite\IssueHub\config.json`
 
 ### Creating an Issue
-To create a complete issue, both severity and description are required:
+To create a complete issue, both severity and description are required. You can also specify domain, category, priority, expected effort, owner, area, refs, and multiple tags:
 ```bash
-issue create --severity CRITICAL --title "Null pointer in scheduler" --description "The scheduler crashes on null values."
+issue create \
+  --severity CRITICAL \
+  --priority P0 \
+  --expected-effort M \
+  --title "Null pointer in scheduler" \
+  --description "The scheduler crashes on null values." \
+  --domain scheduler \
+  --category product \
+  --owner agent-1 \
+  --tag core \
+  --tag perf
 ```
 
 ### Reserving an ID
@@ -31,11 +41,12 @@ issue create --reserve
 ```
 
 ### Finding an Issue
-Finding an issue by text query executes an all-inclusive wide search across every database column simultaneously (using SQL OR matching). You can search for a sequence number (e.g. `9627`), a status (e.g. `PARTIAL`), a tag, an owner, or a description word:
+Finding an issue by text query executes an all-inclusive wide search across every database column simultaneously (using SQL OR matching). You can search for a sequence number (e.g. `9627`), a status (e.g. `PARTIAL`), a tag, an owner, or a description word. You can also filter by domain, category, priority, effort, owner, tag, and chronological boundaries:
 ```bash
 issue find Bug-1000
 issue find "9627"
-issue find "scheduler crashes"
+issue find "scheduler crashes" --domain scheduler --priority P0
+issue find --tag perf --closed-after 2026-08-01
 ```
 
 To view the audit and modification history of an issue:
