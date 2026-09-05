@@ -21,16 +21,24 @@
 
             <h5 class="fw-bold text-secondary border-bottom pb-2 mt-4">B. Portal Pages</h5>
             
-            <p class="small fw-bold text-dark mb-1">1. Summary Dashboard & Filter List:</p>
-            <p class="small text-muted mb-2">Displays real-time metric counter cards (All Issues, Open, Closed, Reserved, Retired) and provides multi-variable dropdown controls to filter the ledger list cleanly. Empty selection values are automatically normalized to prevent database query syntax issues.</p>
-            
-            <p class="small fw-bold text-dark mb-1">2. Interactive Creation / Reservation Form:</p>
+            <p class="small fw-bold text-dark mb-1">1. Summary Dashboard &amp; Filter List:</p>
+            <p class="small text-muted mb-2">Displays real-time metric counter cards (All Issues, Open, Closed, Reserved, Retired) and provides multi-variable dropdown controls to filter the ledger list cleanly. Empty selection values are automatically normalized to prevent database query syntax issues. Alongside the multi-select dimensions, the panel filters on Issue ID, Branch, Owner, Tag, Area, Classification, Task, and Worktree, plus created, updated, and closed date boundaries. Multi-value filters accept repeated parameters or a comma-separated list interchangeably.</p>
+            <p class="small text-muted mb-2">The filter controls are rendered from Jinja macros shared with the analytics dashboard, and both pages bind to the same server-side filter definition as the REST API, so the three surfaces cannot offer different filtering vocabularies.</p>
+
+            <p class="small fw-bold text-dark mb-1">2. Sorting and Pagination:</p>
+            <p class="small text-muted mb-2">Every column header sorts the list by that column, reversing direction on a second click and showing an arrow for the active column. Sorting keeps the active filters and returns to the first page. Lookup-backed columns sort by their configured rank rather than alphabetically, and a unique tiebreaker beneath every ordering guarantees that paging never repeats or skips an issue.</p>
+            <p class="small text-muted mb-2">The footer reports the rows actually on the page, the total matches, and the page number, with first, previous, numbered, next, and last links that carry the filters and sort. A new search always starts at page 1, and an offset past the end of the results falls back to the last page that exists.</p>
+
+            <p class="small fw-bold text-dark mb-1">3. Analytics Dashboard:</p>
+            <p class="small text-muted mb-2">Offers the same filter vocabulary as the issue list, applied in SQL on the server. Every KPI and chart is drawn from that single filtered set, so a filter always applies to all graphs. Filters live in the URL and can be shared or bookmarked. The treemap segments by two independently chosen dimensions &mdash; the first groups the outer tiles, the second (optional) subdivides each group into nested tiles &mdash; so severity is one dimension among many rather than a fixed second axis.</p>
+
+            <p class="small fw-bold text-dark mb-1">4. Interactive Creation / Reservation Form:</p>
             <p class="small text-muted mb-2">Allows creating full issues or pre-allocating reserved IDs instantly. The form normalizes input parameters, converts illegal filename characters to dashes, collapses duplicate dashes, and displays a dynamic preview of the generated canonical ID (e.g. <code>tessallite-Bug-9592</code>) based on the project's key template.</p>
             
-            <p class="small fw-bold text-dark mb-1">3. Detailed Markdown rendering and Audit Timelines:</p>
+            <p class="small fw-bold text-dark mb-1">5. Detailed Markdown rendering and Audit Timelines:</p>
             <p class="small text-muted mb-2">Displays issue descriptions with styled Markdown rendering (such as headings, lists, tables, and spacing). Includes direct controls to edit metadata fields, append discussion notes with automatic server timezone stamps, or retire duplicate records with explicit duplicate references.</p>
 
-            <p class="small fw-bold text-dark mb-1">4. Snapshot Deltas Collapsible Logs:</p>
+            <p class="small fw-bold text-dark mb-1">6. Snapshot Deltas Collapsible Logs:</p>
             <p class="small text-muted mb-0">Every issue mutation (creation, reservation, updates, commenting, retirement) writes a record to the <code>issue_history</code> table. The Web portal lists these log entries as an interactive timeline, allowing administrators to expand collapsible panels and inspect raw before/after JSON dictionary representation diffs.</p>
         </div>
 

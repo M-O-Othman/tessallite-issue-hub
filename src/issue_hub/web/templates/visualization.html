@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_filters.html" as f %}
 
 {% block title %}Analytics Dashboard - Tessallite Issue Hub{% endblock %}
 
@@ -30,205 +31,155 @@
 {% endblock %}
 
 {% block content %}
-<div class="row g-4 mb-4">
-    <!-- Left Sidebar: Controls & Date Filters -->
-    <div class="col-lg-3">
-        <div class="analytics-card p-4">
-            <h5 class="fw-bold mb-3 text-dark"><i class="fa-solid fa-sliders me-2 text-secondary"></i>Dashboard Filters</h5>
-            <hr class="my-3">
 
-            <!-- Quick Date Presets -->
-            <div class="mb-3">
-                <label class="small fw-bold text-muted mb-2 d-block"><i class="fa-solid fa-clock-rotate-left me-1"></i> Quick Date Ranges</label>
-                <div class="d-flex flex-wrap gap-2">
-                    <button class="btn btn-outline-dark btn-sm preset-btn" onclick="applyPreset('today')">Today</button>
-                    <button class="btn btn-outline-dark btn-sm preset-btn" onclick="applyPreset('yesterday')">Since Yesterday</button>
-                    <button class="btn btn-outline-dark btn-sm preset-btn" onclick="applyPreset('week')">This Week</button>
-                    <button class="btn btn-outline-dark btn-sm preset-btn" onclick="applyPreset('month')">This Month</button>
-                    <button class="btn btn-outline-dark btn-sm preset-btn" onclick="applyPreset('30days')">Last 30 Days</button>
-                    <button class="btn btn-outline-dark btn-sm preset-btn" onclick="applyPreset('year')">This Year</button>
-                    <button class="btn btn-outline-dark btn-sm preset-btn active" id="btn-all-time" onclick="applyPreset('all')">All Time</button>
+<!-- Filter surface: identical macros to the issue list, so both pages offer the
+     same filtering vocabulary and an identical query string yields the same set. -->
+<div class="card p-4 mb-4 bg-white shadow-sm border-0">
+    <form action="/visualization" method="get" id="analytics-filter-form">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-7">
+                <label class="form-label small fw-bold text-uppercase text-secondary mb-1">Text Search</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light text-muted" style="border-radius: 10px 0 0 10px;"><i class="fa-solid fa-magnifying-glass"></i></span>
+                    <input type="text" class="form-control" name="q" value="{{ filters.display('q') }}" placeholder="Search ID, AKA, title, description, refs, owner, area..." style="border-radius: 0 10px 10px 0;">
                 </div>
             </div>
-
-            <!-- Custom Date Range -->
-            <div class="mb-3">
-                <label class="small fw-bold text-muted mb-1"><i class="fa-solid fa-calendar-days me-1"></i> Custom From Date</label>
-                <input type="date" class="form-control form-control-sm" id="fromDate" onchange="onDateChange()">
+            <div class="col-md-5 d-flex gap-2">
+                <button type="submit" class="btn btn-dark flex-grow-1 py-2"><i class="fa-solid fa-filter me-1"></i> Apply Filters</button>
+                <a href="/visualization" class="btn btn-outline-secondary py-2" style="border-radius: 10px; font-weight: 600;"><i class="fa-solid fa-xmark me-1"></i> Clear</a>
+                <a href="/?{{ filters.query_string(offset=None) }}" class="btn btn-outline-primary py-2" style="border-radius: 10px; font-weight: 600;" title="Open these same filters in the issue list"><i class="fa-solid fa-list me-1"></i> Issues</a>
+                <button class="btn btn-outline-success py-2 px-3" type="button" data-bs-toggle="collapse" data-bs-target="#analyticsFiltersCollapse" aria-expanded="false" aria-controls="analyticsFiltersCollapse" style="border-radius: 10px; font-weight: 600;">
+                    <i class="fa-solid fa-sliders me-1"></i> Options <i class="fa-solid fa-chevron-down ms-1 small" id="advanced-chevron"></i>
+                </button>
             </div>
-            <div class="mb-3">
-                <label class="small fw-bold text-muted mb-1"><i class="fa-solid fa-calendar-days me-1"></i> Custom To Date</label>
-                <input type="date" class="form-control form-control-sm" id="toDate" onchange="onDateChange()">
+        </div>
+
+        <div class="collapse show" id="analyticsFiltersCollapse">
+            <div class="border-top mt-3 pt-3">
+                <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                    <h6 class="fw-bold mb-0 text-secondary uppercase tracking-wider" style="font-size: 0.75rem;"><i class="fa-solid fa-layer-group me-1"></i> Advanced Filtering Dimensions</h6>
+                    <div class="d-flex flex-wrap gap-2">
+                        <span class="small fw-bold text-muted me-1"><i class="fa-solid fa-clock-rotate-left me-1"></i> Created:</span>
+                        <button type="button" class="btn btn-outline-dark btn-sm preset-btn" onclick="applyPreset('today')">Today</button>
+                        <button type="button" class="btn btn-outline-dark btn-sm preset-btn" onclick="applyPreset('yesterday')">Since Yesterday</button>
+                        <button type="button" class="btn btn-outline-dark btn-sm preset-btn" onclick="applyPreset('week')">This Week</button>
+                        <button type="button" class="btn btn-outline-dark btn-sm preset-btn" onclick="applyPreset('month')">This Month</button>
+                        <button type="button" class="btn btn-outline-dark btn-sm preset-btn" onclick="applyPreset('30days')">Last 30 Days</button>
+                        <button type="button" class="btn btn-outline-dark btn-sm preset-btn" onclick="applyPreset('year')">This Year</button>
+                        <button type="button" class="btn btn-outline-dark btn-sm preset-btn" onclick="applyPreset('all')">All Time</button>
+                    </div>
+                </div>
+                {{ f.advanced_filters(filters, projects, repositories, statuses, severities, priorities, efforts, domains, categories) }}
             </div>
+        </div>
+    </form>
+</div>
 
-            <hr class="my-3">
-
-            <!-- Metadata Filters -->
-            <div class="mb-3">
-                <label for="filter-project" class="small fw-bold text-muted mb-1">Project</label>
-                <select class="form-select form-select-sm" id="filter-project" onchange="updateDashboard()">
-                    <option value="">[All Projects]</option>
-                    {% for p in projects %}
-                    <option value="{{ p[0] }}">{{ p[1] or p[0] }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="mb-3">
-                <label for="filter-repository" class="small fw-bold text-muted mb-1">Repository</label>
-                <select class="form-select form-select-sm" id="filter-repository" onchange="updateDashboard()">
-                    <option value="">[All Repositories]</option>
-                    {% for r in repositories %}
-                    <option value="{{ r[0] }}">{{ r[1] or r[0] }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="mb-3">
-                <label for="filter-severity" class="small fw-bold text-muted mb-1">Severity</label>
-                <select class="form-select form-select-sm" id="filter-severity" onchange="updateDashboard()">
-                    <option value="">[All Severities]</option>
-                    {% for s in severities %}
-                    <option value="{{ s[0] }}">{{ s[1] or s[0] }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="mb-3">
-                <label for="filter-domain" class="small fw-bold text-muted mb-1">Domain</label>
-                <select class="form-select form-select-sm" id="filter-domain" onchange="updateDashboard()">
-                    <option value="">[All Domains]</option>
-                    {% for d in domains %}
-                    <option value="{{ d[0] }}">{{ d[1] or d[0] }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="mb-3">
-                <label for="filter-category" class="small fw-bold text-muted mb-1">Category</label>
-                <select class="form-select form-select-sm" id="filter-category" onchange="updateDashboard()">
-                    <option value="">[All Categories]</option>
-                    {% for c in categories %}
-                    <option value="{{ c[0] }}">{{ c[1] or c[0] }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <button class="btn btn-outline-dark btn-sm w-100 py-2 mt-2" onclick="resetFilters()"><i class="fa-solid fa-arrows-rotate me-1"></i> Reset Filters</button>
+<!-- KPI Row -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3 col-sm-6">
+        <div class="analytics-card p-3 text-center">
+            <div class="text-muted small fw-bold uppercase">Total Scope</div>
+            <div class="kpi-num" id="kpi-total">0</div>
+            <div class="small text-secondary">Matched Issues</div>
         </div>
     </div>
-
-    <!-- Right Dashboard Area -->
-    <div class="col-lg-9">
-        <!-- KPI Row -->
-        <div class="row g-3 mb-4">
-            <div class="col-md-3 col-sm-6">
-                <div class="analytics-card p-3 text-center">
-                    <div class="text-muted small fw-bold uppercase">Total Scope</div>
-                    <div class="kpi-num" id="kpi-total">0</div>
-                    <div class="small text-secondary">Matched Issues</div>
-                </div>
-            </div>
-            <div class="col-md-3 col-sm-6">
-                <div class="analytics-card p-3 text-center">
-                    <div class="text-muted small fw-bold uppercase" style="color: #d49a15;">Open Backlog</div>
-                    <div class="kpi-num" style="color: #d49a15;" id="kpi-open">0</div>
-                    <div class="small text-secondary">Pending Resolution</div>
-                </div>
-            </div>
-            <div class="col-md-3 col-sm-6">
-                <div class="analytics-card p-3 text-center">
-                    <div class="text-muted small fw-bold uppercase" style="color: #006C35;">Resolved</div>
-                    <div class="kpi-num" style="color: #006C35;" id="kpi-closed">0</div>
-                    <div class="small text-secondary">Verified & Fixed</div>
-                </div>
-            </div>
-            <div class="col-md-3 col-sm-6">
-                <div class="analytics-card p-3 text-center">
-                    <div class="text-muted small fw-bold uppercase" style="color: #0284c7;">Completion Rate</div>
-                    <div class="kpi-num" style="color: #0284c7;" id="kpi-rate">0%</div>
-                    <div class="small text-secondary">Fidelity Progress</div>
-                </div>
-            </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="analytics-card p-3 text-center">
+            <div class="text-muted small fw-bold uppercase" style="color: #d49a15;">Open Backlog</div>
+            <div class="kpi-num" style="color: #d49a15;" id="kpi-open">0</div>
+            <div class="small text-secondary">Non-Terminal</div>
         </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="analytics-card p-3 text-center">
+            <div class="text-muted small fw-bold uppercase" style="color: #006C35;">Closed</div>
+            <div class="kpi-num" style="color: #006C35;" id="kpi-closed">0</div>
+            <div class="small text-secondary">Terminal Status</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="analytics-card p-3 text-center">
+            <div class="text-muted small fw-bold uppercase" style="color: #0284c7;">Closure Rate</div>
+            <div class="kpi-num" style="color: #0284c7;" id="kpi-rate">0%</div>
+            <div class="small text-secondary">Closed / Total</div>
+        </div>
+    </div>
+</div>
 
-        <!-- Timescale Cumulative progress and Burndown Chart -->
-        <div class="analytics-card p-4 mb-4">
+<!-- Timescale Cumulative progress and Burndown Chart -->
+<div class="analytics-card p-4 mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-chart-line me-2 text-success"></i>Timescale Issue Burndown &amp; Progress</h5>
+    </div>
+    <div id="progress-chart" class="chart-container"></div>
+</div>
+
+<!-- Daily Technical Debt Movement -->
+<div class="analytics-card p-4 mb-4">
+    <h5 class="fw-bold mb-3 text-dark"><i class="fa-solid fa-scale-unbalanced me-2 text-danger"></i>Daily Technical Debt Movement</h5>
+    <div id="debt-chart" class="chart-container" style="height: 350px;"></div>
+</div>
+
+<!-- Two-dimension Treemap -->
+<div class="analytics-card p-4 mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h5 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-square-poll-horizontal me-2 text-primary"></i>Multi-Dimensional Treemap Analysis</h5>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <label for="treemap-dimension" class="small fw-bold text-muted mb-0"><i class="fa-solid fa-diagram-project me-1"></i> Segment by</label>
+            <select class="form-select form-select-sm border-dark-subtle fw-bold" id="treemap-dimension" style="width: 160px; border-radius: 8px;" onchange="updateTreemap()">
+                {% for d in dimensions %}
+                <option value="{{ d.value }}" {% if d.value == "project" %}selected{% endif %}>{{ d.label }}</option>
+                {% endfor %}
+            </select>
+            <label for="treemap-secondary" class="small fw-bold text-muted mb-0">then by</label>
+            <select class="form-select form-select-sm border-dark-subtle fw-bold" id="treemap-secondary" style="width: 160px; border-radius: 8px;" onchange="updateTreemap()">
+                <option value="">(none)</option>
+                {% for d in dimensions %}
+                <option value="{{ d.value }}" {% if d.value == "severity" %}selected{% endif %}>{{ d.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    <p class="text-muted small mb-3">Both segmenting dimensions are selectable. Outer tiles group by the first dimension; nested tiles subdivide by the second. Tile area is proportional to issue count.</p>
+    <div id="treemap-chart" class="chart-container" style="height: 450px;"></div>
+</div>
+
+<!-- Aging WIP and Investment Allocation -->
+<div class="row g-4 mb-4">
+    <div class="col-md-6">
+        <div class="analytics-card p-4">
+            <h5 class="fw-bold mb-3 text-dark"><i class="fa-solid fa-hourglass-half me-2 text-warning"></i>Aging Work In Progress</h5>
+            <div id="aging-wip-chart" class="chart-container" style="height: 350px;"></div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="analytics-card p-4">
+            <h5 class="fw-bold mb-3 text-dark"><i class="fa-solid fa-chart-pie me-2 text-success"></i>Investment Allocation (Category Bandwidth)</h5>
+            <div id="investment-chart" class="chart-container" style="height: 350px;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Distribution and Project Volume -->
+<div class="row g-4">
+    <div class="col-md-6">
+        <div class="analytics-card p-4">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-chart-line me-2 text-success"></i>Timescale Issue Burndown & Progress</h5>
-                <span class="badge bg-light text-dark border font-monospace">Cumulative Timeline</span>
+                <h5 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-chart-pie me-2 text-info"></i>Distribution Analysis</h5>
+                <select class="form-select form-select-sm border-dark-subtle fw-bold" id="dist-dimension" style="width: 160px; border-radius: 8px;" onchange="updateDistributionChart()">
+                    {% for d in dimensions %}
+                    <option value="{{ d.value }}" {% if d.value == "severity" %}selected{% endif %}>{{ d.label }}</option>
+                    {% endfor %}
+                </select>
             </div>
-            <div id="progress-chart" class="chart-container"></div>
+            <div id="distribution-chart" class="chart-container" style="height: 350px;"></div>
         </div>
-
-        <!-- Incoming Debt Trend: Daily Created vs Resolved Rate (New!) -->
-        <div class="analytics-card p-4 mb-4">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-arrows-spin me-2 text-warning"></i>Incoming Debt Trend (Created vs. Resolved Daily Rate)</h5>
-                <span class="badge bg-light text-dark border font-monospace">Daily Velocity</span>
-            </div>
-            <div id="debt-chart" class="chart-container" style="height: 350px;"></div>
-        </div>
-
-        <!-- Interactive Multi-Dimensional Treemap (Gate 2) -->
-        <div class="analytics-card p-4 mb-4">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-square-poll-horizontal me-2 text-primary"></i>Multi-Dimensional Treemap Analysis</h5>
-                <div class="d-flex align-items-center gap-2">
-                    <label for="treemap-dimension" class="small fw-bold text-muted mb-0"><i class="fa-solid fa-diagram-project me-1"></i> Segment By:</label>
-                    <select class="form-select form-select-sm border-dark-subtle fw-bold" id="treemap-dimension" style="width: 150px; border-radius: 8px;" onchange="updateTreemap()">
-                        <option value="project">Project</option>
-                        <option value="domain">Domain</option>
-                        <option value="category">Category</option>
-                        <option value="repository">Repository</option>
-                        <option value="status">Status</option>
-                        <option value="owner">Owner</option>
-                    </select>
-                </div>
-            </div>
-            <p class="text-muted small mb-3">Tiles represent metadata segments. **Area/Size** is proportional to the **Issue Count**, and nested tile **Colors** represent the **Severity** breakdown (Red: Critical, Orange: High, Yellow: Medium, Green: Low, Grey: Unverified).</p>
-            <div id="treemap-chart" class="chart-container" style="height: 450px;"></div>
-        </div>
-
-        <!-- Side-by-Side: Aging WIP and Investment Allocation (New!) -->
-        <div class="row g-4 mb-4">
-            <div class="col-md-6">
-                <div class="analytics-card p-4">
-                    <h5 class="fw-bold mb-3 text-dark"><i class="fa-solid fa-hourglass-half me-2 text-danger"></i>Aging WIP & Flow Bottlenecks</h5>
-                    <div id="aging-wip-chart" class="chart-container" style="height: 350px;"></div>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="analytics-card p-4">
-                    <h5 class="fw-bold mb-3 text-dark"><i class="fa-solid fa-chart-pie me-2 text-success"></i>Investment Allocation (Category Bandwidth)</h5>
-                    <div id="investment-chart" class="chart-container" style="height: 350px;"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Multi-dimension Distribution Analysis -->
-        <div class="row g-4">
-            <div class="col-md-6">
-                <div class="analytics-card p-4">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-chart-pie me-2 text-info"></i>Distribution Analysis</h5>
-                        <select class="form-select form-select-sm border-dark-subtle fw-bold" id="dist-dimension" style="width: 150px; border-radius: 8px;" onchange="updateDistributionChart()">
-                            <option value="severity">Severity</option>
-                            <option value="status">Status</option>
-                            <option value="category">Category</option>
-                            <option value="domain">Domain</option>
-                            <option value="owner">Owner</option>
-                        </select>
-                    </div>
-                    <div id="distribution-chart" class="chart-container" style="height: 350px;"></div>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="analytics-card p-4">
-                    <h5 class="fw-bold mb-3 text-dark"><i class="fa-solid fa-square-poll-vertical me-2 text-warning"></i>Project Contrib Volume</h5>
-                    <div id="project-volume-chart" class="chart-container" style="height: 350px;"></div>
-                </div>
-            </div>
+    </div>
+    <div class="col-md-6">
+        <div class="analytics-card p-4">
+            <h5 class="fw-bold mb-3 text-dark"><i class="fa-solid fa-square-poll-vertical me-2 text-warning"></i>Project Contrib Volume</h5>
+            <div id="project-volume-chart" class="chart-container" style="height: 350px;"></div>
         </div>
     </div>
 </div>
@@ -247,6 +198,8 @@
     // Parse raw issues dataset securely from the passive text block (Gate 2 / SEC-002)
     const rawIssues = JSON.parse(document.getElementById("issues-data").textContent);
     const terminalStatuses = JSON.parse(document.getElementById("terminal-statuses-data").textContent).map(s => s.toUpperCase());
+    const severityColors = {{ severity_colors_json|safe }};
+    const treemapPalette = {{ treemap_palette_json|safe }};
     
     // ECharts Instances
     let progressChartInstance = null;
@@ -257,12 +210,11 @@
     let distChartInstance = null;
     let projVolumeChartInstance = null;
     
-    // Global Filter State
-    let filterFrom = null;
-    let filterTo = null;
+    // Filtering happens server-side. Every chart on this page renders the same
+    // server-filtered set, so a filter cannot reach some charts and miss others.
+    const issues = rawIssues;
 
     document.addEventListener("DOMContentLoaded", function() {
-        // Initialize ECharts instances
         progressChartInstance = echarts.init(document.getElementById("progress-chart"));
         debtChartInstance = echarts.init(document.getElementById("debt-chart"));
         treemapChartInstance = echarts.init(document.getElementById("treemap-chart"));
@@ -270,137 +222,69 @@
         investmentChartInstance = echarts.init(document.getElementById("investment-chart"));
         distChartInstance = echarts.init(document.getElementById("distribution-chart"));
         projVolumeChartInstance = echarts.init(document.getElementById("project-volume-chart"));
-        
-        // Render initial view (All Time)
+
         updateDashboard();
-        
-        // Handle responsive resizing
+
         window.addEventListener("resize", function() {
-            progressChartInstance.resize();
-            if (debtChartInstance) debtChartInstance.resize();
-            if (treemapChartInstance) treemapChartInstance.resize();
-            if (agingWipChartInstance) agingWipChartInstance.resize();
-            if (investmentChartInstance) investmentChartInstance.resize();
-            distChartInstance.resize();
-            projVolumeChartInstance.resize();
+            [progressChartInstance, debtChartInstance, treemapChartInstance,
+             agingWipChartInstance, investmentChartInstance, distChartInstance,
+             projVolumeChartInstance].forEach(function(chart) {
+                if (chart) chart.resize();
+            });
         });
     });
 
-    // Preset Range applier (Section 8)
+    // Date presets fill the shared created_from/created_to filter inputs and
+    // resubmit, so they travel through exactly the same server-side path as
+    // every other filter.
     function applyPreset(preset) {
-        // Deactivate all preset buttons
-        document.querySelectorAll(".preset-btn").forEach(btn => btn.classList.remove("active"));
-        
+        const form = document.getElementById("analytics-filter-form");
+        const fromInput = form.querySelector('[name="created_from"]');
+        const toInput = form.querySelector('[name="created_to"]');
+        const pad = n => String(n).padStart(2, "0");
+        const fmt = d => pad(d.getDate()) + "-" + pad(d.getMonth() + 1) + "-" + d.getFullYear();
+
         const now = new Date();
-        const todayStr = now.toISOString().slice(0, 10);
-        
-        document.getElementById("fromDate").value = "";
-        document.getElementById("toDate").value = "";
-        
-        if (preset === "all") {
-            document.getElementById("btn-all-time").classList.add("active");
-            filterFrom = null;
-            filterTo = null;
-        } else {
-            let fromDate = new Date();
-            if (preset === "today") {
-                fromDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            } else if (preset === "yesterday") {
-                fromDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-            } else if (preset === "week") {
-                const day = now.getDay();
-                const diff = now.getDate() - day + (day === 0 ? -6 : 1); // Monday
-                fromDate = new Date(now.setDate(diff));
-            } else if (preset === "month") {
-                fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
-            } else if (preset === "30days") {
-                fromDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
-            } else if (preset === "year") {
-                fromDate = new Date(now.getFullYear(), 0, 1);
-            }
-            
-            filterFrom = fromDate;
-            filterTo = new Date();
-            
-            document.getElementById("fromDate").value = filterFrom.toISOString().slice(0, 10);
-            document.getElementById("toDate").value = filterTo.toISOString().slice(0, 10);
+        let start = null;
+        if (preset === "today") {
+            start = now;
+        } else if (preset === "yesterday") {
+            start = new Date(now.getTime() - 864e5);
+        } else if (preset === "week") {
+            start = new Date(now.getTime() - 7 * 864e5);
+        } else if (preset === "month") {
+            start = new Date(now.getFullYear(), now.getMonth(), 1);
+        } else if (preset === "30days") {
+            start = new Date(now.getTime() - 30 * 864e5);
+        } else if (preset === "year") {
+            start = new Date(now.getFullYear(), 0, 1);
         }
-        
-        updateDashboard();
-    }
 
-    function onDateChange() {
-        document.querySelectorAll(".preset-btn").forEach(btn => btn.classList.remove("active"));
-        
-        const fromStr = document.getElementById("fromDate").value;
-        const toStr = document.getElementById("toDate").value;
-        
-        filterFrom = fromStr ? new Date(fromStr) : null;
-        filterTo = toStr ? new Date(toStr) : null;
-        
-        updateDashboard();
-    }
-
-    function resetFilters() {
-        document.getElementById("filter-project").value = "";
-        document.getElementById("filter-repository").value = "";
-        document.getElementById("filter-severity").value = "";
-        document.getElementById("filter-domain").value = "";
-        document.getElementById("filter-category").value = "";
-        applyPreset("all");
+        if (fromInput) fromInput.value = start ? fmt(start) : "";
+        if (toInput) toInput.value = "";
+        form.submit();
     }
 
     function updateDashboard() {
-        // 1. Filter issues based on active state (Gate 2 / Section 10)
-        const filtered = rawIssues.filter(item => {
-            // Date Filter
-            if (filterFrom || filterTo) {
-                const cDate = new Date(item.created_at);
-                if (filterFrom && cDate < filterFrom) return false;
-                if (filterTo && cDate > filterTo) return false;
-            }
-            
-            // Metadata Filters
-            const fProject = document.getElementById("filter-project").value;
-            if (fProject && item.project !== fProject) return false;
-            
-            const fRepo = document.getElementById("filter-repository").value;
-            if (fRepo && item.repository !== fRepo) return false;
-            
-            const fSeverity = document.getElementById("filter-severity").value;
-            if (fSeverity && item.severity !== fSeverity) return false;
-            
-            const fDomain = document.getElementById("filter-domain").value;
-            if (fDomain && item.domain !== fDomain) return false;
-            
-            const fCategory = document.getElementById("filter-category").value;
-            if (fCategory && item.category !== fCategory) return false;
-            
-            return true;
-        });
-
-        // 2. Recalculate KPIs (Gate 3 / ANL-001)
-        const total = filtered.length;
-        const open = filtered.filter(i => !terminalStatuses.includes((i.status || "").toUpperCase()) && !i.is_retired).length;
-        const closed = filtered.filter(i => terminalStatuses.includes((i.status || "").toUpperCase()) && !i.is_retired).length;
+        const total = issues.length;
+        const open = issues.filter(i => !terminalStatuses.includes((i.status || "").toUpperCase()) && !i.is_retired).length;
+        const closed = issues.filter(i => terminalStatuses.includes((i.status || "").toUpperCase()) && !i.is_retired).length;
         const rate = total > 0 ? Math.round((closed / total) * 100) : 0;
-        
+
         document.getElementById("kpi-total").innerText = total;
         document.getElementById("kpi-open").innerText = open;
         document.getElementById("kpi-closed").innerText = closed;
         document.getElementById("kpi-rate").innerText = rate + "%";
 
-        // 3. Render Timescale progress and burndown
-        renderProgressChart(filtered);
-        
-        // 4. Render distributions and treemap
-        updateTreemap(filtered);
-        renderDebtChart(filtered);
-        renderAgingWipChart(filtered);
-        renderInvestmentChart(filtered);
-        updateDistributionChart(filtered);
-        renderProjectVolumeChart(filtered);
+        renderProgressChart(issues);
+        renderDebtChart(issues);
+        updateTreemap();
+        renderAgingWipChart(issues);
+        renderInvestmentChart(issues);
+        updateDistributionChart();
+        renderProjectVolumeChart(issues);
     }
+
 
     function renderProgressChart(issues) {
         // Collect dates and sort them (Gate 2 / Defensive Timestamp parsing)
@@ -662,85 +546,104 @@
         investmentChartInstance.setOption(option, true);
     }
 
-    function updateTreemap(issuesList) {
-        const issues = issuesList || getActiveFilteredIssues();
-        const dim = document.getElementById("treemap-dimension").value;
-        
-        const treemapData = [];
-        issues.forEach(i => {
-            let val = i[dim];
-            if (dim === "owner") val = i.owner || "Unassigned";
-            if (dim === "status") val = i.status || "OPEN";
-            if (!val) val = "None";
-            
-            let sev = i.severity || "UNVERIFIED";
-            sev = sev.toUpperCase();
-            
-            const key = `${val} - ${sev}`;
-            
-            let existing = treemapData.find(item => item.name === key);
-            if (existing) {
-                existing.value += 1;
-            } else {
-                treemapData.push({
-                    name: key,
-                    value: 1,
-                    severity: sev
-                });
+    // Resolve one dimension's value for an issue, naming the empty case.
+    function dimensionValue(issue, dimension) {
+        const value = issue[dimension];
+        if (value === null || value === undefined || value === "") {
+            return dimension === "owner" ? "Unassigned" : "None";
+        }
+        return String(value);
+    }
+
+    function severityOr(name, index) {
+        const hit = severityColors[String(name).toUpperCase()];
+        return hit || treemapPalette[index % treemapPalette.length];
+    }
+
+    // Both segmenting dimensions are chosen by the user. The first groups the
+    // outer tiles; the second, when set, subdivides each group into real nested
+    // children rather than flattening the pair into a single combined label.
+    function updateTreemap() {
+        const primary = document.getElementById("treemap-dimension").value;
+        const secondary = document.getElementById("treemap-secondary").value;
+
+        const groups = new Map();
+        issues.forEach(function(issue) {
+            const outer = dimensionValue(issue, primary);
+            if (!groups.has(outer)) {
+                groups.set(outer, { total: 0, children: new Map() });
+            }
+            const group = groups.get(outer);
+            group.total += 1;
+            if (secondary) {
+                const inner = dimensionValue(issue, secondary);
+                group.children.set(inner, (group.children.get(inner) || 0) + 1);
             }
         });
 
-        // Beautiful branded severity colors (Gate 2 / Section 10)
-        const sevColors = {
-            "CRITICAL": "#ef4444",   // Red
-            "HIGH": "#f97316",       // Orange
-            "MEDIUM": "#eab308",     // Yellow / Gold
-            "LOW": "#22c55e",        // Green
-            "UNVERIFIED": "#94a3b8"  // Slate Grey
-        };
+        const data = [];
+        let outerIndex = 0;
+        groups.forEach(function(group, name) {
+            const node = { name: name, value: group.total };
+            const outerColor = primary === "severity"
+                ? severityOr(name, outerIndex)
+                : treemapPalette[outerIndex % treemapPalette.length];
 
-        treemapData.forEach(item => {
-            item.itemStyle = {
-                color: sevColors[item.severity] || "#94a3b8"
-            };
+            if (secondary && group.children.size) {
+                node.children = [];
+                let innerIndex = 0;
+                group.children.forEach(function(count, childName) {
+                    node.children.push({
+                        name: childName,
+                        value: count,
+                        itemStyle: {
+                            color: secondary === "severity"
+                                ? severityOr(childName, innerIndex)
+                                : treemapPalette[(outerIndex + innerIndex + 1) % treemapPalette.length]
+                        }
+                    });
+                    innerIndex += 1;
+                });
+            }
+            node.itemStyle = { color: outerColor };
+            data.push(node);
+            outerIndex += 1;
         });
 
-        const option = {
+        data.sort(function(a, b) { return b.value - a.value; });
+
+        treemapChartInstance.setOption({
             tooltip: {
                 formatter: function (info) {
-                    const value = info.value;
-                    const name = info.name || '';
-                    const cleanName = name.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-                    return [
-                        '<div class="tooltip-title fw-bold" style="font-size:13px;">' + cleanName + '</div>',
-                        'Issue Count: ' + value
-                    ].join('');
+                    const path = (info.treePathInfo || [])
+                        .slice(1)
+                        .map(function (p) { return p.name; })
+                        .join(" \u2192 ");
+                    const escaped = String(path || info.name || "")
+                        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                    return '<div class="fw-bold" style="font-size:13px;">' + escaped + "</div>Issue Count: " + info.value;
                 }
             },
-            series: [
-                {
-                    name: 'Issues Breakdown',
-                    type: 'treemap',
-                    visibleMin: 10,
-                    label: {
-                        show: true,
-                        formatter: '{b}: {c}'
-                    },
-                    itemStyle: {
-                        borderColor: '#fff',
-                        borderWidth: 2,
-                        gapWidth: 4
-                    },
-                    data: treemapData
-                }
-            ]
-        };
-
-        treemapChartInstance.setOption(option, true);
+            series: [{
+                name: "Issues Breakdown",
+                type: "treemap",
+                roam: false,
+                nodeClick: false,
+                // No minimum tile size is imposed, so small segments stay visible
+                // instead of silently vanishing from the chart.
+                upperLabel: secondary ? { show: true, height: 22, color: "#fff", fontWeight: "bold" } : { show: false },
+                label: { show: true, formatter: "{b}: {c}" },
+                levels: [
+                    { itemStyle: { borderColor: "#fff", borderWidth: 3, gapWidth: 3 } },
+                    { itemStyle: { borderColor: "#fff", borderWidth: 1, gapWidth: 1 } }
+                ],
+                data: data
+            }]
+        }, true);
     }
 
-    function updateDistributionChart(issuesList) {
-        const issues = issuesList || getActiveFilteredIssues();
+
+    function updateDistributionChart() {
         const dim = document.getElementById("dist-dimension").value;
         
         // Aggregate values
@@ -826,31 +729,5 @@
     }
 
     // Helper to filter raw dataset using active filters (needed when toggle changing distributions)
-    function getActiveFilteredIssues() {
-        return rawIssues.filter(item => {
-            if (filterFrom || filterTo) {
-                const cDate = new Date(item.created_at);
-                if (filterFrom && cDate < filterFrom) return false;
-                if (filterTo && cDate > filterTo) return false;
-            }
-            
-            const fProject = document.getElementById("filter-project").value;
-            if (fProject && item.project !== fProject) return false;
-            
-            const fRepo = document.getElementById("filter-repository").value;
-            if (fRepo && item.repository !== fRepo) return false;
-            
-            const fSeverity = document.getElementById("filter-severity").value;
-            if (fSeverity && item.severity !== fSeverity) return false;
-            
-            const fDomain = document.getElementById("filter-domain").value;
-            if (fDomain && item.domain !== fDomain) return false;
-            
-            const fCategory = document.getElementById("filter-category").value;
-            if (fCategory && item.category !== fCategory) return false;
-            
-            return true;
-        });
-    }
 </script>
 {% endblock %}

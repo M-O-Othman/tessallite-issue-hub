@@ -94,11 +94,21 @@ def parse_args():
     find_parser.add_argument("--closed-before", help="Filter issues closed before timestamp/date")
     find_parser.add_argument("--created-after", help="Filter issues created after timestamp/date")
     find_parser.add_argument("--created-before", help="Filter issues created before timestamp/date")
-    find_parser.add_argument("--repository", help="Filter by repository")
-    find_parser.add_argument("--project", help="Filter by project")
+    # SUPPRESS: keep a value given before the subcommand (`issue --repository X find`)
+    # instead of overwriting it with this parser's default.
+    find_parser.add_argument("--repository", default=argparse.SUPPRESS, help="Filter by repository")
+    find_parser.add_argument("--project", default=argparse.SUPPRESS, help="Filter by project")
     find_parser.add_argument("--is-retired", help="Filter by retired state (true/false)")
     find_parser.add_argument("--is-terminal", help="Filter by terminal state (true/false)")
     find_parser.add_argument("--history", action="store_true", help="Include modification history in the output")
+    find_parser.add_argument("--branch", default=argparse.SUPPRESS, help="Filter by branch")
+    find_parser.add_argument("--worktree", default=argparse.SUPPRESS, help="Filter by worktree path")
+    find_parser.add_argument("--task", help="Filter by task ID")
+    find_parser.add_argument("--updated-after", help="Filter issues updated after timestamp/date")
+    find_parser.add_argument("--updated-before", help="Filter issues updated before timestamp/date")
+    find_parser.add_argument("--sort", help="Sort results as '<field> [asc|desc]', e.g. 'severity desc'")
+    find_parser.add_argument("--limit", type=int, help="Maximum results to return")
+    find_parser.add_argument("--offset", type=int, help="Number of results to skip")
 
     # update command
     update_parser = subparsers.add_parser("update", help="Update issue fields, append text, or retire the record")
@@ -201,6 +211,14 @@ def handle_find(args, config: Dict[str, Any]) -> Dict[str, Any]:
         "project": args.project or (config["project"] if args.query is None else None),
         "is_retired": args.is_retired.lower() in ("true", "1", "yes") if args.is_retired else None,
         "is_terminal": args.is_terminal.lower() in ("true", "1", "yes") if args.is_terminal else None,
+        "branch": getattr(args, "branch", None),
+        "worktree": getattr(args, "worktree", None),
+        "task": getattr(args, "task", None),
+        "updated_from": getattr(args, "updated_after", None),
+        "updated_to": getattr(args, "updated_before", None),
+        "sort": getattr(args, "sort", None),
+        "limit": getattr(args, "limit", None),
+        "offset": getattr(args, "offset", None),
     }
     
     # Check query: exact ID vs text search

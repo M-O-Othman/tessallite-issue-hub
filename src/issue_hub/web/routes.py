@@ -1,15 +1,16 @@
-from fastapi import APIRouter, Request, Depends, Form, HTTPException, status, Query
+from fastapi import APIRouter, Request, Depends, Form, HTTPException, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import text, func
 from sqlalchemy.orm import Session
 import bcrypt
+import json
 import markdown
 import logging
 import html
 import secrets
 from html.parser import HTMLParser
-from typing import Optional, List
+from typing import Optional
 from pathlib import Path
 from datetime import datetime
 
@@ -18,7 +19,10 @@ from issue_hub.config import settings
 from issue_hub.models import Issue, IssueHistory, LookupValue, HubSetting
 from issue_hub.issue_service import create_issue, update_issue, get_project_key_template
 from issue_hub.schemas import CreateIssueRequest, UpdateIssueRequest, UpdateIssueRequestSet, RetireRequest
-from issue_hub.search import query_issues
+from issue_hub.search import build_issue_query, apply_sort, resolve_limit, parse_sort
+from issue_hub.filters import IssueFilterParams, issue_filters
+from issue_hub.pagination import build_page, clamp_offset
+from issue_hub import ui_config
 
 logger = logging.getLogger("issue_hub.web")
 
@@ -189,203 +193,98 @@ def set_global_project(request: Request, project: Optional[str] = None):
     return response
 
 
+def load_lookups(db: Session) -> dict:
+    """Load every active lookup list used by the filter UI.
+
+    Shared by the issue list and the analytics dashboard so both offer the same
+    filter vocabulary.
+    """
+    lookups = {}
+    for name, lookup_type in ui_config.LOOKUP_LISTS.items():
+        columns = [LookupValue.value, LookupValue.label]
+        if lookup_type == "STATUS":
+            columns.append(LookupValue.is_terminal)
+        lookups[name] = db.query(*columns).filter(
+            LookupValue.lookup_type == lookup_type,
+            LookupValue.is_active.is_(True),
+        ).order_by(LookupValue.display_order, LookupValue.value).all()
+    return lookups
+
+
+def apply_global_project(request: Request, filters: IssueFilterParams) -> IssueFilterParams:
+    """Apply the site-wide project selector when no explicit project is chosen."""
+    global_project = request.cookies.get("global_project")
+    if not filters.values.get("project") and global_project and global_project.strip() and global_project != "ALL":
+        filters.values["project"] = [global_project.strip()]
+    return filters
+
+
 @router.get("/", response_class=HTMLResponse)
 def get_issues_list(
     request: Request,
-    q: Optional[str] = None,
-    project: Optional[List[str]] = Query(None),
-    repository: Optional[List[str]] = Query(None),
-    status: Optional[List[str]] = Query(None),
-    severity: Optional[List[str]] = Query(None),
-    priority: Optional[List[str]] = Query(None),
-    domain: Optional[List[str]] = Query(None),
-    category: Optional[List[str]] = Query(None),
-    expected_effort: Optional[List[str]] = Query(None),
-    area: Optional[str] = None,
-    classification: Optional[str] = None,
-    owner: Optional[str] = None,
-    task: Optional[str] = None,
-    worktree: Optional[str] = None,
-    tag: Optional[str] = None,
-    is_retired: Optional[str] = None,
-    is_terminal: Optional[str] = None,
-    created_after: Optional[str] = None,
-    created_before: Optional[str] = None,
-    closed_after: Optional[str] = None,
-    closed_before: Optional[str] = None,
-    limit: int = 100,
-    offset: int = 0,
-    db: Session = Depends(get_db)
+    filters: IssueFilterParams = Depends(issue_filters),
+    db: Session = Depends(get_db),
 ):
+    """Render the issue list.
+
+    Binds to the same filter dependency as the REST API and the analytics
+    dashboard, so an identical query string returns an identical result set.
+    """
     if not is_authenticated(request):
         return redirect_to_login()
-        
-    def normalize_list(lst: Optional[List[str]]) -> Optional[List[str]]:
-        if not lst:
-            return None
-        res = [item.strip() for item in lst if item and item.strip()]
-        return res if res else None
 
-    # Retrieve global project cookie context
-    global_project = request.cookies.get("global_project")
-    
-    project_norm = normalize_list(project)
-    # If no explicit project selected but site-wide project is active, filter by active global project
-    if not project_norm and global_project and global_project.strip() and global_project != "ALL":
-        project_norm = [global_project.strip()]
-        
-    repository_norm = normalize_list(repository)
-    status_norm = normalize_list(status)
-    severity_norm = normalize_list(severity)
-    priority_norm = normalize_list(priority)
-    domain_norm = normalize_list(domain)
-    category_norm = normalize_list(category)
-    expected_effort_norm = normalize_list(expected_effort)
-    
-    q_norm = q.strip() if q and q.strip() else None
-    area_norm = area.strip() if area and area.strip() else None
-    classification_norm = classification.strip() if classification and classification.strip() else None
-    owner_norm = owner.strip() if owner and owner.strip() else None
-    task_norm = task.strip() if task and task.strip() else None
-    worktree_norm = worktree.strip() if worktree and worktree.strip() else None
-    tag_norm = tag.strip() if tag and tag.strip() else None
-    
-    # Helper to parse dates in multiple formats, prioritizing DD-MM-YYYY (Gate 2)
-    def parse_user_date(date_str: Optional[str], end_of_day: bool = False) -> Optional[datetime]:
-        if not date_str or not date_str.strip():
-            return None
-        cleaned = date_str.strip()
-        for fmt in ("%d-%m-%Y", "%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d"):
-            try:
-                dt = datetime.strptime(cleaned, fmt)
-                if end_of_day:
-                    return dt.replace(hour=23, minute=59, second=59)
-                return dt
-            except ValueError:
-                continue
-        return None
+    filters = apply_global_project(request, filters)
+    lookups = load_lookups(db)
 
-    created_after_dt = parse_user_date(created_after, end_of_day=False)
-    created_before_dt = parse_user_date(created_before, end_of_day=True)
-    closed_after_dt = parse_user_date(closed_after, end_of_day=False)
-    closed_before_dt = parse_user_date(closed_before, end_of_day=True)
+    kwargs = filters.to_query_kwargs()
+    base = build_issue_query(db, **kwargs)
+    total = base.count()
 
-    # Safe boolean parsing of parameters
-    is_retired_bool: Optional[bool] = None
-    if is_retired == "true":
-        is_retired_bool = True
-    elif is_retired == "false":
-        is_retired_bool = False
-        
-    is_terminal_bool: Optional[bool] = None
-    if is_terminal == "true":
-        is_terminal_bool = True
-    elif is_terminal == "false":
-        is_terminal_bool = False
-        
-    # Query lookups for filtering lists
-    projects = db.query(LookupValue.value, LookupValue.label).filter(LookupValue.lookup_type == "PROJECT", LookupValue.is_active.is_(True)).all()
-    repositories = db.query(LookupValue.value, LookupValue.label).filter(LookupValue.lookup_type == "REPOSITORY", LookupValue.is_active.is_(True)).all()
-    statuses = db.query(LookupValue.value, LookupValue.label, LookupValue.is_terminal).filter(LookupValue.lookup_type == "STATUS", LookupValue.is_active.is_(True)).all()
-    severities = db.query(LookupValue.value, LookupValue.label).filter(LookupValue.lookup_type == "SEVERITY", LookupValue.is_active.is_(True)).all()
-    priorities = db.query(LookupValue.value, LookupValue.label).filter(LookupValue.lookup_type == "PRIORITY", LookupValue.is_active.is_(True)).all()
-    efforts = db.query(LookupValue.value, LookupValue.label).filter(LookupValue.lookup_type == "EFFORT", LookupValue.is_active.is_(True)).all()
-    domains = db.query(LookupValue.value, LookupValue.label).filter(LookupValue.lookup_type == "DOMAIN", LookupValue.is_active.is_(True)).all()
-    categories = db.query(LookupValue.value, LookupValue.label).filter(LookupValue.lookup_type == "CATEGORY", LookupValue.is_active.is_(True)).all()
-    
-    # Query issues using normalized parameters
-    items, total = query_issues(
-        db=db,
-        q=q_norm,
-        project=project_norm,
-        repository=repository_norm,
-        status=status_norm,
-        severity=severity_norm,
-        priority=priority_norm,
-        expected_effort=expected_effort_norm,
-        area=area_norm,
-        domain=domain_norm,
-        category=category_norm,
-        classification=classification_norm,
-        owner=owner_norm,
-        task=task_norm,
-        worktree=worktree_norm,
-        tag=tag_norm,
-        is_retired=is_retired_bool,
-        is_terminal=is_terminal_bool,
-        created_from=created_after_dt,
-        created_to=created_before_dt,
-        closed_from=closed_after_dt,
-        closed_to=closed_before_dt,
-        limit=limit,
-        offset=offset,
+    # Resolve the page size once; every rendered number derives from this value
+    # rather than from what the client asked for.
+    effective_limit = resolve_limit(db, filters.limit)
+    offset = clamp_offset(filters.offset, total, effective_limit)
+
+    items = (
+        apply_sort(base, filters.sort, kwargs.get("q"))
+        .limit(effective_limit)
+        .offset(offset)
+        .all()
     )
-    
-    # Header summary counts, dynamically affected by the active Project Selector context (Section 19.3)
-    q_all = db.query(Issue)
-    q_open = db.query(Issue).filter(Issue.status.in_([s[0] for s in statuses if not s[2]]), Issue.is_retired.is_(False))
-    q_closed = db.query(Issue).filter(Issue.status.in_([s[0] for s in statuses if s[2]]), Issue.is_retired.is_(False))
-    q_reserved = db.query(Issue).filter(Issue.status == "RESERVED", Issue.is_retired.is_(False))
-    q_retired = db.query(Issue).filter(Issue.is_retired.is_(True))
-    
-    if project_norm:
-        q_all = q_all.filter(Issue.project.in_(project_norm))
-        q_open = q_open.filter(Issue.project.in_(project_norm))
-        q_closed = q_closed.filter(Issue.project.in_(project_norm))
-        q_reserved = q_reserved.filter(Issue.project.in_(project_norm))
-        q_retired = q_retired.filter(Issue.project.in_(project_norm))
-        
-    count_all = q_all.count()
-    count_open = q_open.count()
-    count_closed = q_closed.count()
-    count_reserved = q_reserved.count()
-    count_retired = q_retired.count()
-    
+    page = build_page(total=total, limit=effective_limit, offset=offset, count=len(items))
+
+    parsed_sort = parse_sort(filters.sort)
+
+    # Header summary counts, scoped by the active project context.
+    statuses = lookups["statuses"]
+    open_statuses = [row[0] for row in statuses if not row[2]]
+    closed_statuses = [row[0] for row in statuses if row[2]]
+
+    def scoped(query):
+        project = filters.values.get("project")
+        return query.filter(Issue.project.in_(project)) if project else query
+
+    counts = {
+        "all": scoped(db.query(Issue)).count(),
+        "open": scoped(db.query(Issue).filter(Issue.status.in_(open_statuses), Issue.is_retired.is_(False))).count(),
+        "closed": scoped(db.query(Issue).filter(Issue.status.in_(closed_statuses), Issue.is_retired.is_(False))).count(),
+        "reserved": scoped(db.query(Issue).filter(Issue.status == "RESERVED", Issue.is_retired.is_(False))).count(),
+        "retired": scoped(db.query(Issue).filter(Issue.is_retired.is_(True))).count(),
+    }
+
     return templates.TemplateResponse(
         request,
         "list.html",
         {
             "items": [i.to_dict() for i in items],
-            "total": total,
-            "limit": limit,
-            "offset": offset,
-            "q": q_norm or "",
-            "project_filter": project_norm or [],
-            "repository_filter": repository_norm or [],
-            "status_filter": status_norm or [],
-            "severity_filter": severity_norm or [],
-            "priority_filter": priority_norm or [],
-            "domain_filter": domain_norm or [],
-            "category_filter": category_norm or [],
-            "expected_effort_filter": expected_effort_norm or [],
-            "area_filter": area_norm or "",
-            "classification_filter": classification_norm or "",
-            "owner_filter": owner_norm or "",
-            "task_filter": task_norm or "",
-            "worktree_filter": worktree_norm or "",
-            "tag_filter": tag_norm or "",
-            "is_retired_filter": is_retired_bool,
-            "is_terminal_filter": is_terminal_bool,
-            "created_after_filter": created_after_dt.strftime("%d-%m-%Y") if created_after_dt else "",
-            "created_before_filter": created_before_dt.strftime("%d-%m-%Y") if created_before_dt else "",
-            "closed_after_filter": closed_after_dt.strftime("%d-%m-%Y") if closed_after_dt else "",
-            "closed_before_filter": closed_before_dt.strftime("%d-%m-%Y") if closed_before_dt else "",
-            "projects": projects,
-            "repositories": repositories,
-            "statuses": statuses,
-            "severities": severities,
-            "priorities": priorities,
-            "efforts": efforts,
-            "domains": domains,
-            "categories": categories,
-            "counts": {
-                "all": count_all,
-                "open": count_open,
-                "closed": count_closed,
-                "reserved": count_reserved,
-                "retired": count_retired,
-            }
-        }
+            "filters": filters,
+            "page": page,
+            "sort_columns": ui_config.LIST_SORT_COLUMNS,
+            "sort_field": parsed_sort[0] if parsed_sort else None,
+            "sort_direction": parsed_sort[1] if parsed_sort else None,
+            "counts": counts,
+            **lookups,
+        },
     )
 
 
@@ -857,51 +756,62 @@ def post_update_template(
 
 
 @router.get("/visualization", response_class=HTMLResponse)
-def get_visualization(request: Request, db: Session = Depends(get_db)):
+def get_visualization(
+    request: Request,
+    filters: IssueFilterParams = Depends(issue_filters),
+    db: Session = Depends(get_db),
+):
+    """Render the analytics dashboard.
+
+    Filtering happens in SQL through the same query builder the issue list uses,
+    so every chart and KPI on the page reflects exactly the filters in the URL
+    and the two surfaces cannot disagree.
+    """
     if not is_authenticated(request):
         return redirect_to_login()
-        
-    import json
-    # Retrieve global project cookie context
-    global_project = request.cookies.get("global_project")
-    query = db.query(Issue)
-    if global_project and global_project != "ALL":
-        query = query.filter(Issue.project == global_project)
-    all_issues = query.all()
-    # Escape literal '</script>' tags to prevent premature script tag closure in HTML templates (Gate 2)
-    issues_json = json.dumps([i.to_dict() for i in all_issues], default=str).replace("</script>", "<\\/script>").replace("</Script>", "<\\/Script>")
-    
-    # Query terminal statuses for database-driven metrics calculations (Gate 3 / ANL-001)
+
+    filters = apply_global_project(request, filters)
+    lookups = load_lookups(db)
+
+    # Project only the columns the charts read. Serialising every field would
+    # inline megabytes of description and legacy text into the page.
+    fields = ui_config.ANALYTICS_PROJECTION_FIELDS
+    rows = build_issue_query(db, **filters.to_query_kwargs()).with_entities(
+        *[getattr(Issue, name) for name in fields]
+    ).all()
+
+    def serialise(row) -> dict:
+        record = {}
+        for name, value in zip(fields, row):
+            record[name] = value.isoformat() if isinstance(value, datetime) else value
+        return record
+
+    # Escape literal '</script>' so issue content cannot close the script tag early.
+    issues_json = json.dumps([serialise(r) for r in rows], default=str) \
+        .replace("</script>", "<\\/script>").replace("</Script>", "<\\/Script>")
+
     terminal_statuses = [
-        val for val, in db.query(LookupValue.value).filter(
-            LookupValue.lookup_type == "STATUS", 
-            LookupValue.is_terminal.is_(True)
+        value for value, in db.query(LookupValue.value).filter(
+            LookupValue.lookup_type == "STATUS",
+            LookupValue.is_terminal.is_(True),
         ).all()
     ]
-    terminal_statuses_json = json.dumps(terminal_statuses)
-    
-    # Query lookups for filtering lists
-    projects = db.query(LookupValue.value, LookupValue.label).filter(LookupValue.lookup_type == "PROJECT", LookupValue.is_active.is_(True)).all()
-    repositories = db.query(LookupValue.value, LookupValue.label).filter(LookupValue.lookup_type == "REPOSITORY", LookupValue.is_active.is_(True)).all()
-    statuses = db.query(LookupValue.value, LookupValue.label).filter(LookupValue.lookup_type == "STATUS", LookupValue.is_active.is_(True)).all()
-    severities = db.query(LookupValue.value, LookupValue.label).filter(LookupValue.lookup_type == "SEVERITY", LookupValue.is_active.is_(True)).all()
-    domains = db.query(LookupValue.value, LookupValue.label).filter(LookupValue.lookup_type == "DOMAIN", LookupValue.is_active.is_(True)).all()
-    categories = db.query(LookupValue.value, LookupValue.label).filter(LookupValue.lookup_type == "CATEGORY", LookupValue.is_active.is_(True)).all()
-    
+
     return templates.TemplateResponse(
         request,
         "visualization.html",
         {
             "issues_json": issues_json,
-            "terminal_statuses_json": terminal_statuses_json,
-            "projects": projects,
-            "repositories": repositories,
-            "statuses": statuses,
-            "severities": severities,
-            "domains": domains,
-            "categories": categories,
-        }
+            "terminal_statuses_json": json.dumps(terminal_statuses),
+            "result_count": len(rows),
+            "filters": filters,
+            "dimensions": ui_config.ANALYTICS_DIMENSIONS,
+            "severity_colors_json": json.dumps(ui_config.SEVERITY_COLORS),
+            "treemap_palette_json": json.dumps(ui_config.TREEMAP_PALETTE),
+            **lookups,
+        },
     )
+
 
 @router.get("/help", response_class=HTMLResponse)
 def get_help_home(request: Request):

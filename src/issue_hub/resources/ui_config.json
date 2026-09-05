@@ -1,0 +1,173 @@
+{
+  "_comment": "Non-secret presentation and parsing configuration for the Issue Hub. Edited by operators; not compiled into source.",
+  "date_input_formats": [
+    "%d-%m-%Y",
+    "%Y-%m-%d",
+    "%d/%m/%Y",
+    "%Y/%m/%d"
+  ],
+  "date_display_format": "%d-%m-%Y",
+  "pagination": {
+    "fallback_limit": 100,
+    "max_limit": 1000,
+    "page_window": 5
+  },
+  "default_sort": "sequence_number desc",
+  "lookup_backed_columns": {
+    "status": "STATUS",
+    "severity": "SEVERITY",
+    "priority": "PRIORITY",
+    "expected_effort": "EFFORT"
+  },
+  "list_sort_columns": [
+    {
+      "field": "sequence_number",
+      "label": "ID",
+      "width": "110px",
+      "align": "left"
+    },
+    {
+      "field": "status",
+      "label": "Status",
+      "width": "100px",
+      "align": "left"
+    },
+    {
+      "field": "severity",
+      "label": "Severity",
+      "width": "90px",
+      "align": "left"
+    },
+    {
+      "field": "priority",
+      "label": "Priority",
+      "width": "80px",
+      "align": "left"
+    },
+    {
+      "field": "title",
+      "label": "Title",
+      "width": "",
+      "align": "left"
+    },
+    {
+      "field": "project",
+      "label": "Project / Repository",
+      "width": "180px",
+      "align": "left"
+    },
+    {
+      "field": "domain",
+      "label": "Area / Domain",
+      "width": "120px",
+      "align": "left"
+    },
+    {
+      "field": "owner",
+      "label": "Owner",
+      "width": "100px",
+      "align": "left"
+    },
+    {
+      "field": "updated_at",
+      "label": "Updated",
+      "width": "110px",
+      "align": "right"
+    }
+  ],
+  "analytics_dimensions": [
+    {
+      "value": "project",
+      "label": "Project"
+    },
+    {
+      "value": "repository",
+      "label": "Repository"
+    },
+    {
+      "value": "status",
+      "label": "Status"
+    },
+    {
+      "value": "severity",
+      "label": "Severity"
+    },
+    {
+      "value": "priority",
+      "label": "Priority"
+    },
+    {
+      "value": "expected_effort",
+      "label": "Expected Effort"
+    },
+    {
+      "value": "domain",
+      "label": "Domain"
+    },
+    {
+      "value": "category",
+      "label": "Category"
+    },
+    {
+      "value": "area",
+      "label": "Area"
+    },
+    {
+      "value": "classification",
+      "label": "Classification"
+    },
+    {
+      "value": "owner",
+      "label": "Owner"
+    }
+  ],
+  "analytics_projection_fields": [
+    "issue_id",
+    "sequence_number",
+    "project",
+    "repository",
+    "branch",
+    "status",
+    "severity",
+    "priority",
+    "expected_effort",
+    "area",
+    "classification",
+    "domain",
+    "category",
+    "owner",
+    "is_retired",
+    "created_at",
+    "updated_at",
+    "retired_at"
+  ],
+  "severity_colors": {
+    "CRITICAL": "#ef4444",
+    "HIGH": "#f97316",
+    "MEDIUM": "#eab308",
+    "LOW": "#22c55e",
+    "UNVERIFIED": "#94a3b8"
+  },
+  "treemap_palette": [
+    "#0f766e",
+    "#1d4ed8",
+    "#7c3aed",
+    "#b45309",
+    "#be123c",
+    "#0891b2",
+    "#4d7c0f",
+    "#a21caf",
+    "#475569",
+    "#c2410c"
+  ],
+  "lookup_lists": {
+    "projects": "PROJECT",
+    "repositories": "REPOSITORY",
+    "statuses": "STATUS",
+    "severities": "SEVERITY",
+    "priorities": "PRIORITY",
+    "efforts": "EFFORT",
+    "domains": "DOMAIN",
+    "categories": "CATEGORY"
+  }
+}

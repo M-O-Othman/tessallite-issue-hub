@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_filters.html" as f %}
 
 {% block title %}Issues - Tessallite Issue Hub{% endblock %}
 
@@ -18,7 +19,7 @@
             <select class="form-select form-select-sm fw-bold border-dark-subtle" id="activeProjectSelector" style="width: 220px; border-radius: 8px;" onchange="updateProjectContext(this.value)">
                 <option value="">All Projects</option>
                 {% for p in projects %}
-                <option value="{{ p[0] }}" {% if project_filter == p[0] %}selected{% endif %}>{{ p[1] or p[0] }}</option>
+                <option value="{{ p[0] }}" {% if p[0] in filters.selected("project") %}selected{% endif %}>{{ p[1] or p[0] }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -77,20 +78,23 @@
 <!-- Search and Filter Form (Section 19.3) -->
 <div class="card p-4 mb-4 bg-white shadow-sm border-0">
     <form action="/" method="get" id="filter-form">
-        <input type="hidden" name="offset" id="form-offset-input" value="{{ offset }}">
-        
+        {# Sort survives a filter change; offset deliberately does not, so a new
+           search always lands on page 1 rather than a stale page number. #}
+        {% if filters.sort %}<input type="hidden" name="sort" value="{{ filters.sort }}">{% endif %}
+
         <!-- Primary Search Row -->
         <div class="row g-3 align-items-end">
             <div class="col-md-7">
                 <label class="form-label small fw-bold text-uppercase text-secondary mb-1">Text Search</label>
                 <div class="input-group">
                     <span class="input-group-text bg-light text-muted" style="border-radius: 10px 0 0 10px;"><i class="fa-solid fa-magnifying-glass"></i></span>
-                    <input type="text" class="form-control" name="q" value="{{ q }}" placeholder="Search ID, AKA, title, description, refs, owner, area..." style="border-radius: 0 10px 10px 0;">
+                    <input type="text" class="form-control" name="q" value="{{ filters.display('q') }}" placeholder="Search ID, AKA, title, description, refs, owner, area..." style="border-radius: 0 10px 10px 0;">
                 </div>
             </div>
             <div class="col-md-5 d-flex gap-2">
                 <button type="submit" class="btn btn-dark flex-grow-1 py-2"><i class="fa-solid fa-filter me-1"></i> Apply Filters</button>
                 <a href="/" class="btn btn-outline-secondary py-2" style="border-radius: 10px; font-weight: 600;"><i class="fa-solid fa-xmark me-1"></i> Clear</a>
+                <a href="/visualization?{{ filters.query_string(offset=None, limit=None) }}" class="btn btn-outline-primary py-2" style="border-radius: 10px; font-weight: 600;" title="Open these same filters in Analytics"><i class="fa-solid fa-chart-line me-1"></i> Analytics</a>
                 <button class="btn btn-outline-success py-2 px-3" type="button" data-bs-toggle="collapse" data-bs-target="#advancedFiltersCollapse" aria-expanded="false" aria-controls="advancedFiltersCollapse" style="border-radius: 10px; font-weight: 600;">
                     <i class="fa-solid fa-sliders me-1"></i> Options <i class="fa-solid fa-chevron-down ms-1 small" id="advanced-chevron"></i>
                 </button>
@@ -101,241 +105,7 @@
         <div class="collapse show" id="advancedFiltersCollapse">
             <div class="border-top mt-3 pt-3">
                 <h6 class="fw-bold mb-3 text-secondary uppercase tracking-wider" style="font-size: 0.75rem;"><i class="fa-solid fa-layer-group me-1"></i> Advanced Filtering Dimensions</h6>
-                
-                <div class="row g-3">
-                    <!-- Column 1: Core Dimensions -->
-                    <div class="col-md-3">
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold text-muted text-uppercase mb-1">Projects</label>
-                            <div class="dropdown">
-                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center bg-white" type="button" id="projectDropdownBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside" style="border-radius: 8px; border: 1px solid #8A94A6; padding: 10px 14px;">
-                                    <span class="text-truncate dropdown-label">[All]</span>
-                                </button>
-                                <div class="dropdown-menu p-3 w-100 shadow-lg" aria-labelledby="projectDropdownBtn" style="min-width: 240px; max-height: 280px; overflow-y: auto; border-radius: 10px;">
-                                    {% for p in projects %}
-                                    <div class="form-check mb-1">
-                                        <input class="form-check-input filter-checkbox" type="checkbox" name="project" value="{{ p[0] }}" id="project_{{ p[0] }}" {% if p[0] in project_filter %}checked{% endif %}>
-                                        <label class="form-check-label small font-monospace" for="project_{{ p[0] }}">{{ p[1] or p[0] }}</label>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold text-muted text-uppercase mb-1">Repositories</label>
-                            <div class="dropdown">
-                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center bg-white" type="button" id="repoDropdownBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside" style="border-radius: 8px; border: 1px solid #8A94A6; padding: 10px 14px;">
-                                    <span class="text-truncate dropdown-label">[All]</span>
-                                </button>
-                                <div class="dropdown-menu p-3 w-100 shadow-lg" aria-labelledby="repoDropdownBtn" style="min-width: 240px; max-height: 280px; overflow-y: auto; border-radius: 10px;">
-                                    {% for r in repositories %}
-                                    <div class="form-check mb-1">
-                                        <input class="form-check-input filter-checkbox" type="checkbox" name="repository" value="{{ r[0] }}" id="repo_{{ r[0] }}" {% if r[0] in repository_filter %}checked{% endif %}>
-                                        <label class="form-check-label small font-monospace" for="repo_{{ r[0] }}">{{ r[1] or r[0] }}</label>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Column 2: Status & Severity -->
-                    <div class="col-md-3">
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold text-muted text-uppercase mb-1">Status</label>
-                            <div class="dropdown">
-                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center bg-white" type="button" id="statusDropdownBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside" style="border-radius: 8px; border: 1px solid #8A94A6; padding: 10px 14px;">
-                                    <span class="text-truncate dropdown-label">[All]</span>
-                                </button>
-                                <div class="dropdown-menu p-3 w-100 shadow-lg" aria-labelledby="statusDropdownBtn" style="min-width: 240px; max-height: 280px; overflow-y: auto; border-radius: 10px;">
-                                    {% for s in statuses %}
-                                    <div class="form-check mb-1">
-                                        <input class="form-check-input filter-checkbox" type="checkbox" name="status" value="{{ s[0] }}" id="status_{{ s[0] }}" {% if s[0] in status_filter %}checked{% endif %}>
-                                        <label class="form-check-label small font-monospace" for="status_{{ s[0] }}">{{ s[1] or s[0] }}</label>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold text-muted text-uppercase mb-1">Severity</label>
-                            <div class="dropdown">
-                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center bg-white" type="button" id="severityDropdownBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside" style="border-radius: 8px; border: 1px solid #8A94A6; padding: 10px 14px;">
-                                    <span class="text-truncate dropdown-label">[All]</span>
-                                </button>
-                                <div class="dropdown-menu p-3 w-100 shadow-lg" aria-labelledby="severityDropdownBtn" style="min-width: 240px; max-height: 280px; overflow-y: auto; border-radius: 10px;">
-                                    {% for s in severities %}
-                                    <div class="form-check mb-1">
-                                        <input class="form-check-input filter-checkbox" type="checkbox" name="severity" value="{{ s[0] }}" id="severity_{{ s[0] }}" {% if s[0] in severity_filter %}checked{% endif %}>
-                                        <label class="form-check-label small font-monospace" for="severity_{{ s[0] }}">{{ s[1] or s[0] }}</label>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Column 3: Priority, Effort & Taxonomy -->
-                    <div class="col-md-3">
-                        <div class="row g-2">
-                            <div class="col-6 mb-2">
-                                <label class="form-label small fw-bold text-muted text-uppercase mb-1">Priority</label>
-                                <div class="dropdown">
-                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center bg-white" type="button" id="priorityDropdownBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside" style="border-radius: 8px; border: 1px solid #8A94A6; padding: 10px 14px; font-size: 0.8rem;">
-                                        <span class="text-truncate dropdown-label">[All]</span>
-                                    </button>
-                                    <div class="dropdown-menu p-3 shadow-lg" aria-labelledby="priorityDropdownBtn" style="min-width: 200px; max-height: 240px; overflow-y: auto; border-radius: 10px;">
-                                        {% for p in priorities %}
-                                        <div class="form-check mb-1">
-                                            <input class="form-check-input filter-checkbox" type="checkbox" name="priority" value="{{ p[0] }}" id="priority_{{ p[0] }}" {% if p[0] in priority_filter %}checked{% endif %}>
-                                            <label class="form-check-label small font-monospace" for="priority_{{ p[0] }}">{{ p[1] or p[0] }}</label>
-                                        </div>
-                                        {% endfor %}
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-6 mb-2">
-                                <label class="form-label small fw-bold text-muted text-uppercase mb-1">Effort</label>
-                                <div class="dropdown">
-                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center bg-white" type="button" id="effortDropdownBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside" style="border-radius: 8px; border: 1px solid #8A94A6; padding: 10px 14px; font-size: 0.8rem;">
-                                        <span class="text-truncate dropdown-label">[All]</span>
-                                    </button>
-                                    <div class="dropdown-menu p-3 shadow-lg" aria-labelledby="effortDropdownBtn" style="min-width: 200px; max-height: 240px; overflow-y: auto; border-radius: 10px;">
-                                        {% for e in efforts %}
-                                        <div class="form-check mb-1">
-                                            <input class="form-check-input filter-checkbox" type="checkbox" name="expected_effort" value="{{ e[0] }}" id="effort_{{ e[0] }}" {% if e[0] in expected_effort_filter %}checked{% endif %}>
-                                            <label class="form-check-label small font-monospace" for="effort_{{ e[0] }}">{{ e[1] or e[0] }}</label>
-                                        </div>
-                                        {% endfor %}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="row g-2">
-                            <div class="col-6 mb-2">
-                                <label class="form-label small fw-bold text-muted text-uppercase mb-1">Domain</label>
-                                <div class="dropdown">
-                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center bg-white" type="button" id="domainDropdownBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside" style="border-radius: 8px; border: 1px solid #8A94A6; padding: 10px 14px; font-size: 0.8rem;">
-                                        <span class="text-truncate dropdown-label">[All]</span>
-                                    </button>
-                                    <div class="dropdown-menu p-3 shadow-lg" aria-labelledby="domainDropdownBtn" style="min-width: 200px; max-height: 240px; overflow-y: auto; border-radius: 10px;">
-                                        {% for d in domains %}
-                                        <div class="form-check mb-1">
-                                            <input class="form-check-input filter-checkbox" type="checkbox" name="domain" value="{{ d[0] }}" id="domain_{{ d[0] }}" {% if d[0] in domain_filter %}checked{% endif %}>
-                                            <label class="form-check-label small font-monospace" for="domain_{{ d[0] }}">{{ d[1] or d[0] }}</label>
-                                        </div>
-                                        {% endfor %}
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-6 mb-2">
-                                <label class="form-label small fw-bold text-muted text-uppercase mb-1">Category</label>
-                                <div class="dropdown">
-                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center bg-white" type="button" id="categoryDropdownBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside" style="border-radius: 8px; border: 1px solid #8A94A6; padding: 10px 14px; font-size: 0.8rem;">
-                                        <span class="text-truncate dropdown-label">[All]</span>
-                                    </button>
-                                    <div class="dropdown-menu p-3 shadow-lg" aria-labelledby="categoryDropdownBtn" style="min-width: 200px; max-height: 240px; overflow-y: auto; border-radius: 10px;">
-                                        {% for c in categories %}
-                                        <div class="form-check mb-1">
-                                            <input class="form-check-input filter-checkbox" type="checkbox" name="category" value="{{ c[0] }}" id="category_{{ c[0] }}" {% if c[0] in category_filter %}checked{% endif %}>
-                                            <label class="form-check-label small font-monospace" for="category_{{ c[0] }}">{{ c[1] or c[0] }}</label>
-                                        </div>
-                                        {% endfor %}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Column 4: Text Attributes & Life Cycle -->
-                    <div class="col-md-3">
-                        <div class="row g-2">
-                            <div class="col-6 mb-2">
-                                <label class="form-label small fw-bold text-muted text-uppercase mb-1">Tag</label>
-                                <input type="text" class="form-control form-control-sm" name="tag" value="{{ tag_filter }}" placeholder="excel">
-                            </div>
-                            <div class="col-6 mb-2">
-                                <label class="form-label small fw-bold text-muted text-uppercase mb-1">Owner</label>
-                                <input type="text" class="form-control form-control-sm" name="owner" value="{{ owner_filter }}" placeholder="agent-1">
-                            </div>
-                        </div>
-
-                        <div class="row g-2">
-                            <div class="col-6 mb-2">
-                                <label class="form-label small fw-bold text-muted text-uppercase mb-1">Retired</label>
-                                <select class="form-select form-select-sm" name="is_retired" style="padding: 6px 12px; font-size: 0.85rem;">
-                                    <option value="">[All]</option>
-                                    <option value="true" {% if is_retired_filter == True %}selected{% endif %}>Retired Only</option>
-                                    <option value="false" {% if is_retired_filter == False %}selected{% endif %}>Active Only</option>
-                                </select>
-                            </div>
-                            <div class="col-6 mb-2">
-                                <label class="form-label small fw-bold text-muted text-uppercase mb-1">Terminal</label>
-                                <select class="form-select form-select-sm" name="is_terminal" style="padding: 6px 12px; font-size: 0.85rem;">
-                                    <option value="">[All]</option>
-                                    <option value="true" {% if is_terminal_filter == True %}selected{% endif %}>Terminal Only</option>
-                                    <option value="false" {% if is_terminal_filter == False %}selected{% endif %}>Active / Open</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Section: Rest of Meta Fields & Dates -->
-                <div class="row g-3 mt-1 pt-3 border-top border-light">
-                    <!-- Tech & Code Location Context -->
-                    <div class="col-md-6">
-                        <h6 class="fw-bold mb-2 text-secondary uppercase text-muted" style="font-size: 0.7rem;"><i class="fa-solid fa-code me-1"></i> Technical Code Context</h6>
-                        <div class="row g-2">
-                            <div class="col-6">
-                                <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.7rem;">Area / Module</label>
-                                <input type="text" class="form-control form-control-sm" name="area" value="{{ area_filter }}" placeholder="excel/writer">
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.7rem;">Classification</label>
-                                <input type="text" class="form-control form-control-sm" name="classification" value="{{ classification_filter }}" placeholder="race-condition">
-                            </div>
-                        </div>
-                        <div class="row g-2 mt-2">
-                            <div class="col-6">
-                                <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.7rem;">Task ID</label>
-                                <input type="text" class="form-control form-control-sm font-monospace" name="task" value="{{ task_filter }}" placeholder="task-123">
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.7rem;">Worktree</label>
-                                <input type="text" class="form-control form-control-sm font-monospace" name="worktree" value="{{ worktree_filter }}" placeholder="/work/path">
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Date Bound Ranges -->
-                    <div class="col-md-6">
-                        <h6 class="fw-bold mb-2 text-secondary uppercase text-muted" style="font-size: 0.7rem;"><i class="fa-solid fa-calendar-days me-1"></i> Chronological Boundaries</h6>
-                        <div class="row g-2">
-                            <div class="col-6">
-                                <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.7rem;">Created After</label>
-                                <input type="text" class="form-control form-control-sm" name="created_after" value="{{ created_after_filter or '' }}" placeholder="DD-MM-YYYY" pattern="\d{2}-\d{2}-\d{4}">
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.7rem;">Created Before</label>
-                                <input type="text" class="form-control form-control-sm" name="created_before" value="{{ created_before_filter or '' }}" placeholder="DD-MM-YYYY" pattern="\d{2}-\d{2}-\d{4}">
-                            </div>
-                        </div>
-                        <div class="row g-2 mt-2">
-                            <div class="col-6">
-                                <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.7rem;">Closed After</label>
-                                <input type="text" class="form-control form-control-sm" name="closed_after" value="{{ closed_after_filter or '' }}" placeholder="DD-MM-YYYY" pattern="\d{2}-\d{2}-\d{4}">
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.7rem;">Closed Before</label>
-                                <input type="text" class="form-control form-control-sm" name="closed_before" value="{{ closed_before_filter or '' }}" placeholder="DD-MM-YYYY" pattern="\d{2}-\d{2}-\d{4}">
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                {{ f.advanced_filters(filters, projects, repositories, statuses, severities, priorities, efforts, domains, categories) }}
             </div>
         </div>
     </form>
@@ -344,7 +114,7 @@
 <!-- Issues Table Card (Section 19.3) -->
 <div class="card shadow-sm bg-white mb-4">
     <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-        <h5 class="mb-0 fw-bold text-dark"><i class="fa-solid fa-list me-2"></i>Issue Ledger ({{ total }} results)</h5>
+        <h5 class="mb-0 fw-bold text-dark"><i class="fa-solid fa-list me-2"></i>Issue Ledger ({{ page.total }} results)</h5>
         <div>
             <a href="/issues/create" class="btn btn-dark btn-sm"><i class="fa-solid fa-plus me-1"></i> Create Issue</a>
             <a href="/issues/create?reserve=1" class="btn btn-outline-dark btn-sm ms-2"><i class="fa-solid fa-ticket me-1"></i> Reserve ID</a>
@@ -355,15 +125,25 @@
         <table class="table table-hover align-middle mb-0">
             <thead class="table-light text-muted small uppercase">
                 <tr>
-                    <th class="ps-4" style="width: 110px;">ID</th>
-                    <th style="width: 100px;">Status</th>
-                    <th style="width: 90px;">Severity</th>
-                    <th style="width: 80px;">Priority</th>
-                    <th>Title</th>
-                    <th style="width: 180px;">Project / Repository</th>
-                    <th style="width: 120px;">Area / Domain</th>
-                    <th style="width: 100px;">Owner</th>
-                    <th class="pe-4" style="width: 110px; text-align: right;">Updated</th>
+                    {# Each header links to the same query with a new sort. Filters are
+                       carried through and offset is dropped, so re-sorting returns to page 1. #}
+                    {% for col in sort_columns %}
+                    {% set active = sort_field == col.field %}
+                    {% set next_dir = "desc" if (active and sort_direction == "asc") else "asc" %}
+                    <th class="{% if loop.first %}ps-4{% elif loop.last %}pe-4{% endif %}"
+                        style="{% if col.width %}width: {{ col.width }};{% endif %}{% if col.align == 'right' %} text-align: right;{% endif %}">
+                        <a href="/?{{ filters.query_string(sort=col.field ~ ' ' ~ next_dir, offset=None) }}"
+                           class="text-decoration-none {% if active %}text-dark fw-bold{% else %}text-muted{% endif %}"
+                           title="Sort by {{ col.label }}, {{ next_dir }}ending">
+                            {{ col.label }}
+                            {% if active %}
+                            <i class="fa-solid fa-arrow-{% if sort_direction == 'asc' %}up{% else %}down{% endif %} ms-1 small"></i>
+                            {% else %}
+                            <i class="fa-solid fa-sort ms-1 small opacity-25"></i>
+                            {% endif %}
+                        </a>
+                    </th>
+                    {% endfor %}
                 </tr>
             </thead>
             <tbody>
@@ -449,20 +229,36 @@
             </tbody>
         </table>
     </div>
-    {% if total > limit %}
+    {% if page.total_pages > 1 %}
     <div class="card-footer bg-white py-3 d-flex justify-content-between align-items-center border-top" style="border-bottom-left-radius: 14px; border-bottom-right-radius: 14px;">
-        <span class="small text-muted">Showing {{ offset + 1 }} to {{ [offset + limit, total]|min }} of {{ total }} issues</span>
-        <nav>
+        {# Bounds come from the rows actually returned and the limit actually
+           applied, never from what the client requested. #}
+        <span class="small text-muted">
+            {% if page.count %}
+            Showing {{ page.first_index }} to {{ page.last_index }} of {{ page.total }} issues
+            (page {{ page.page }} of {{ page.total_pages }})
+            {% else %}
+            No issues match the current filters
+            {% endif %}
+        </span>
+        <nav aria-label="Issue list pages">
             <ul class="pagination pagination-sm mb-0">
-                <li class="page-item {% if offset == 0 %}disabled{% endif %}">
-                    <a class="page-link" href="#" onclick="submitWithOffset({{ [0, offset - limit]|max }}); return false;">
-                        &laquo; Previous
-                    </a>
+                <li class="page-item {% if not page.has_prev %}disabled{% endif %}">
+                    <a class="page-link" href="/?{{ filters.query_string(offset=None) }}" title="First page">&laquo;&laquo;</a>
                 </li>
-                <li class="page-item {% if (offset + limit) >= total %}disabled{% endif %}">
-                    <a class="page-link" href="#" onclick="submitWithOffset({{ offset + limit }}); return false;">
-                        Next &raquo;
-                    </a>
+                <li class="page-item {% if not page.has_prev %}disabled{% endif %}">
+                    <a class="page-link" href="/?{{ filters.query_string(offset=page.prev_offset) }}">&laquo; Previous</a>
+                </li>
+                {% for n in page.pages %}
+                <li class="page-item {% if n == page.page %}active{% endif %}">
+                    <a class="page-link" href="/?{{ filters.query_string(offset=page.offset_for(n)) }}">{{ n }}</a>
+                </li>
+                {% endfor %}
+                <li class="page-item {% if not page.has_next %}disabled{% endif %}">
+                    <a class="page-link" href="/?{{ filters.query_string(offset=page.next_offset) }}">Next &raquo;</a>
+                </li>
+                <li class="page-item {% if not page.has_next %}disabled{% endif %}">
+                    <a class="page-link" href="/?{{ filters.query_string(offset=page.offset_for(page.total_pages)) }}" title="Last page">&raquo;&raquo;</a>
                 </li>
             </ul>
         </nav>
@@ -475,11 +271,6 @@
 <script>
 function updateProjectContext(project) {
     window.location.href = "/set-project?project=" + (project || "ALL");
-}
-
-function submitWithOffset(newOffset) {
-    document.getElementById("form-offset-input").value = newOffset;
-    document.getElementById("filter-form").submit();
 }
 
 document.addEventListener("DOMContentLoaded", function() {

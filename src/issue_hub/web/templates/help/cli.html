@@ -58,7 +58,15 @@ issue update Bug-9627 --append-file closeout_details.md</pre>
             <p class="small fw-bold text-dark mb-1">Retire Duplicate:</p>
             <pre class="font-monospace small bg-light p-2 border">issue update Bug-9627 --retire DUPLICATE --duplicate-of Bug-9584 --retire-note "Identical path."</pre>
 
-            <h5 class="fw-bold text-secondary border-bottom pb-2 mt-4">D. Standard Exit Code Mapping</h5>
+            <h5 class="fw-bold text-secondary border-bottom pb-2 mt-4">D. Ordering and Paging <code>find</code></h5>
+            <p class="small text-muted"><code>--sort</code> takes a column name and an optional direction, and also accepts <code>field:desc</code> or <code>-field</code>. Lookup-backed columns (status, severity, priority, expected effort) order by their configured rank rather than alphabetically. <code>--limit</code> and <code>--offset</code> page the results, and ordering is deterministic so paging never repeats or skips an issue.</p>
+            <pre class="bg-dark text-light p-3 rounded small"><code>issue find --sort "severity desc" --limit 20
+issue find --sort "-updated_at" --limit 20 --offset 40
+issue find --branch main --updated-after 01-09-2026</code></pre>
+            <p class="small text-muted">Context options supplied before the subcommand (<code>--project</code>, <code>--repository</code>, <code>--branch</code>, <code>--worktree</code>) apply to the search:</p>
+            <pre class="bg-dark text-light p-3 rounded small"><code>issue --project tessallite find --sort "severity desc"</code></pre>
+
+            <h5 class="fw-bold text-secondary border-bottom pb-2 mt-4">E. Standard Exit Code Mapping</h5>
             <p class="small text-muted">The CLI writes all JSON response bodies directly to `stdout` and returns exit codes (Section 17.4) indicating the exact transaction result:</p>
             <ul class="small text-muted font-monospace" style="list-style-type: none;">
                 <li><i class="fa-solid fa-circle-check text-success me-2"></i> <code>0</code>: Success (JSON printed on stdout)</li>

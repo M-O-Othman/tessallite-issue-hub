@@ -63,6 +63,23 @@ issue update Bug-9627 --retire DUPLICATE --duplicate-of Bug-9584 --retire-note "
 - `5`: Service unavailable or network connection failed
 - `6`: Server-side internal error
 
+
+### Ordering and Paging `find`
+
+`--sort` takes a column name and an optional direction, and also accepts `field:desc` or `-field`. Lookup-backed columns (status, severity, priority, expected effort) order by their configured rank rather than alphabetically. `--limit` and `--offset` page the results, and ordering is deterministic so paging never repeats or skips an issue.
+
+```bash
+issue find --sort "severity desc" --limit 20
+issue find --sort "-updated_at" --limit 20 --offset 40
+issue find --branch main --updated-after 01-09-2026
+```
+
+Context options supplied before the subcommand (`--project`, `--repository`, `--branch`, `--worktree`) apply to the search:
+
+```bash
+issue --project tessallite find --sort "severity desc"
+```
+
 ---
 
 [Previous: REST APIs](apis.md) | [Home: Help Home](home.md) | [Next: Web UI Portal](frontend.md)

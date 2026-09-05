@@ -55,7 +55,28 @@
                 </table>
             </div>
 
-            <h5 class="fw-bold text-secondary border-bottom pb-2 mt-4">C. Flat Error Shape Contract</h5>
+            <h5 class="fw-bold text-secondary border-bottom pb-2 mt-4">C. Shared Filter Surface</h5>
+            <p class="small text-muted">The REST API, the web issue list, and the analytics dashboard bind to one shared filter definition (<code>issue_hub/filters.py</code>). The same query string therefore returns the same result set on all three surfaces.</p>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered small">
+                    <thead class="table-light"><tr><th style="width: 28%;">Parameter</th><th style="width: 22%;">Accepts</th><th>Notes</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>id</code></td><td>One or more issue IDs</td><td>Comma-separated. Also matches alternate identifiers held in <code>aka</code>.</td></tr>
+                        <tr><td><code>q</code></td><td>Text</td><td>Wide search across every attribute.</td></tr>
+                        <tr><td><code>project</code>, <code>repository</code>, <code>status</code>, <code>severity</code>, <code>priority</code>, <code>expected_effort</code>, <code>domain</code>, <code>category</code></td><td>One or more values</td><td>Repeat the parameter or comma-separate. Applied as SQL <code>IN</code>.</td></tr>
+                        <tr><td><code>branch</code>, <code>worktree</code>, <code>task</code>, <code>area</code>, <code>classification</code>, <code>owner</code>, <code>tag</code></td><td>Single value</td><td>Exact match; <code>tag</code> tests JSONB array membership.</td></tr>
+                        <tr><td><code>is_retired</code>, <code>is_terminal</code></td><td><code>true</code> / <code>false</code></td><td>Omit for no opinion.</td></tr>
+                        <tr><td><code>created_from</code>, <code>created_to</code>, <code>updated_from</code>, <code>updated_to</code>, <code>closed_from</code>, <code>closed_to</code></td><td>Date or timestamp</td><td>ISO 8601 or any configured input format (<code>DD-MM-YYYY</code> by default). A date-only upper bound covers the whole day.</td></tr>
+                        <tr><td><code>sort</code></td><td><code>&lt;field&gt; [asc|desc]</code></td><td>Also accepts <code>field:desc</code> and <code>-field</code>.</td></tr>
+                        <tr><td><code>limit</code>, <code>offset</code></td><td>Integers</td><td><code>limit</code> is bounded by <code>pagination.max_limit</code>; requests above it are rejected with 422.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="small text-muted">Date bounds also accept the older <code>created_after</code> / <code>created_before</code>, <code>updated_after</code> / <code>updated_before</code>, and <code>closed_after</code> / <code>closed_before</code> spellings, so existing links keep working.</p>
+            <p class="small text-muted"><strong>Sorting.</strong> Only mapped columns are sortable; the accepted set is derived from the model, and an unrecognised field falls back to the default ordering rather than erroring. Columns backed by a lookup vocabulary sort by their configured <code>display_order</code>, so severity orders CRITICAL, HIGH, MEDIUM, LOW rather than alphabetically. A unique tiebreaker is applied beneath every ordering, so paging with <code>limit</code>/<code>offset</code> never repeats or skips a row.</p>
+            <p class="small text-muted"><strong>Paging.</strong> The response echoes the limit that was actually applied, not the one requested. When no <code>limit</code> is supplied the <code>search_default_limit</code> hub setting is used.</p>
+
+            <h5 class="fw-bold text-secondary border-bottom pb-2 mt-4">D. Flat Error Shape Contract</h5>
             <p class="small text-muted">API errors bypass nested Detail keys, returning a flat, predictable JSON error schema matching Section 16.8:</p>
             <pre class="font-monospace small">{
   "ok": false,

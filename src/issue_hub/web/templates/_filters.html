@@ -1,0 +1,133 @@
+{#
+  Shared filter controls.
+
+  The issue list and the analytics dashboard both render their filter UI from
+  these macros, so the two pages cannot offer different filtering vocabularies.
+  Control names match the canonical query parameters in issue_hub/filters.py.
+#}
+
+{% macro multi_select(name, label, options, selected, compact=false) %}
+<div class="mb-3">
+    <label class="form-label small fw-bold text-muted text-uppercase mb-1"{% if compact %} style="font-size: 0.7rem;"{% endif %}>{{ label }}</label>
+    <div class="dropdown">
+        <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center bg-white"
+                type="button" id="{{ name }}DropdownBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside"
+                style="border-radius: 8px; border: 1px solid #8A94A6; padding: 10px 14px;{% if compact %} font-size: 0.8rem;{% endif %}">
+            <span class="text-truncate dropdown-label">[All]</span>
+        </button>
+        <div class="dropdown-menu p-3 w-100 shadow-lg" aria-labelledby="{{ name }}DropdownBtn"
+             style="min-width: 220px; max-height: 280px; overflow-y: auto; border-radius: 10px;">
+            {% for option in options %}
+            {% set field_id = name ~ "_" ~ loop.index %}
+            <div class="form-check mb-1">
+                <input class="form-check-input filter-checkbox" type="checkbox" name="{{ name }}"
+                       value="{{ option[0] }}" id="{{ field_id }}" {% if option[0] in selected %}checked{% endif %}>
+                <label class="form-check-label small font-monospace" for="{{ field_id }}">{{ option[1] or option[0] }}</label>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+
+{% macro text_filter(name, label, value, placeholder="", monospace=false) %}
+<div>
+    <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.7rem;">{{ label }}</label>
+    <input type="text" class="form-control form-control-sm{% if monospace %} font-monospace{% endif %}"
+           name="{{ name }}" value="{{ value }}" placeholder="{{ placeholder }}">
+</div>
+{% endmacro %}
+
+
+{% macro date_filter(name, label, value) %}
+<div>
+    <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.7rem;">{{ label }}</label>
+    <input type="text" class="form-control form-control-sm" name="{{ name }}" value="{{ value }}"
+           placeholder="DD-MM-YYYY" pattern="[0-9]{2}-[0-9]{2}-[0-9]{4}">
+</div>
+{% endmacro %}
+
+
+{% macro tristate(name, label, value, true_label, false_label) %}
+<div>
+    <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.7rem;">{{ label }}</label>
+    <select class="form-select form-select-sm" name="{{ name }}" style="padding: 6px 12px; font-size: 0.85rem;">
+        <option value="">[All]</option>
+        <option value="true" {% if value == "true" %}selected{% endif %}>{{ true_label }}</option>
+        <option value="false" {% if value == "false" %}selected{% endif %}>{{ false_label }}</option>
+    </select>
+</div>
+{% endmacro %}
+
+
+{#
+  The complete advanced filter surface, shared verbatim by both pages.
+  `filters` is the IssueFilterParams instance from the route.
+#}
+{% macro advanced_filters(filters, projects, repositories, statuses, severities, priorities, efforts, domains, categories) %}
+<div class="row g-3">
+    <div class="col-md-3">
+        {{ multi_select("project", "Projects", projects, filters.selected("project")) }}
+        {{ multi_select("repository", "Repositories", repositories, filters.selected("repository")) }}
+    </div>
+    <div class="col-md-3">
+        {{ multi_select("status", "Status", statuses, filters.selected("status")) }}
+        {{ multi_select("severity", "Severity", severities, filters.selected("severity")) }}
+    </div>
+    <div class="col-md-3">
+        <div class="row g-2">
+            <div class="col-6">{{ multi_select("priority", "Priority", priorities, filters.selected("priority"), true) }}</div>
+            <div class="col-6">{{ multi_select("expected_effort", "Effort", efforts, filters.selected("expected_effort"), true) }}</div>
+        </div>
+        <div class="row g-2">
+            <div class="col-6">{{ multi_select("domain", "Domain", domains, filters.selected("domain"), true) }}</div>
+            <div class="col-6">{{ multi_select("category", "Category", categories, filters.selected("category"), true) }}</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="row g-2 mb-2">
+            <div class="col-6">{{ text_filter("tag", "Tag", filters.display("tag"), "excel") }}</div>
+            <div class="col-6">{{ text_filter("owner", "Owner", filters.display("owner"), "agent-1") }}</div>
+        </div>
+        <div class="row g-2">
+            <div class="col-6">{{ tristate("is_retired", "Retired", filters.display("is_retired"), "Retired Only", "Active Only") }}</div>
+            <div class="col-6">{{ tristate("is_terminal", "Terminal", filters.display("is_terminal"), "Terminal Only", "Active / Open") }}</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mt-1 pt-3 border-top border-light">
+    <div class="col-md-6">
+        <h6 class="fw-bold mb-2 text-secondary uppercase text-muted" style="font-size: 0.7rem;"><i class="fa-solid fa-code me-1"></i> Technical Code Context</h6>
+        <div class="row g-2">
+            <div class="col-6">{{ text_filter("id", "Issue ID", filters.display("id"), "Bug-123, Bug-124", true) }}</div>
+            <div class="col-6">{{ text_filter("branch", "Branch", filters.display("branch"), "main", true) }}</div>
+        </div>
+        <div class="row g-2 mt-2">
+            <div class="col-6">{{ text_filter("area", "Area / Module", filters.display("area"), "excel/writer") }}</div>
+            <div class="col-6">{{ text_filter("classification", "Classification", filters.display("classification"), "race-condition") }}</div>
+        </div>
+        <div class="row g-2 mt-2">
+            <div class="col-6">{{ text_filter("task", "Task ID", filters.display("task"), "task-123", true) }}</div>
+            <div class="col-6">{{ text_filter("worktree", "Worktree", filters.display("worktree"), "/work/path", true) }}</div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <h6 class="fw-bold mb-2 text-secondary uppercase text-muted" style="font-size: 0.7rem;"><i class="fa-solid fa-calendar-days me-1"></i> Chronological Boundaries</h6>
+        <div class="row g-2">
+            <div class="col-6">{{ date_filter("created_from", "Created After", filters.display("created_from")) }}</div>
+            <div class="col-6">{{ date_filter("created_to", "Created Before", filters.display("created_to")) }}</div>
+        </div>
+        <div class="row g-2 mt-2">
+            <div class="col-6">{{ date_filter("updated_from", "Updated After", filters.display("updated_from")) }}</div>
+            <div class="col-6">{{ date_filter("updated_to", "Updated Before", filters.display("updated_to")) }}</div>
+        </div>
+        <div class="row g-2 mt-2">
+            <div class="col-6">{{ date_filter("closed_from", "Closed After", filters.display("closed_from")) }}</div>
+            <div class="col-6">{{ date_filter("closed_to", "Closed Before", filters.display("closed_to")) }}</div>
+        </div>
+    </div>
+</div>
+{% endmacro %}

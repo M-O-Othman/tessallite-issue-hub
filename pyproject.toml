@@ -40,7 +40,7 @@ issue = "issue_cli.main:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-"*" = ["*.html", "web/templates/*.html", "web/templates/*/*.html"]
+"*" = ["*.html", "web/templates/*.html", "web/templates/*/*.html", "resources/*.json"]
 
 [tool.ruff]
 line-length = 120
